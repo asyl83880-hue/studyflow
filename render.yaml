@@ -1,0 +1,23 @@
+# Создаёт платный сервер с постоянным диском. Проверь итоговую цену в Render.
+services:
+  - type: web
+    name: studyflow
+    runtime: docker
+    plan: 0.5c-512mb
+    region: frankfurt
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    healthCheckPath: /api/health
+    envVars:
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: OPENAI_MODEL
+        value: gpt-4o-mini
+      - key: STUDYFLOW_DEMO_ACCESS_CODE
+        generateValue: true
+      - key: STUDYFLOW_DATABASE_URL
+        value: sqlite:////var/data/studyflow.db
+    disk:
+      name: studyflow-data
+      mountPath: /var/data
+      sizeGB: 1
