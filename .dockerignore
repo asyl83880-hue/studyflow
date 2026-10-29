@@ -11,3 +11,6 @@ frontend/dist
 qa
 .git
 *.zip
+
+dist
+**/tests

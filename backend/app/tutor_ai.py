@@ -71,7 +71,7 @@ def configured_model():
 async def request_structured(schema, name, instructions, context, max_tokens):
     key = os.getenv("OPENAI_API_KEY", "").strip()
     if not key:
-        raise HTTPException(503, "AI Tutor пока не настроен. Добавь OPENAI_API_KEY в backend/.env и перезапусти сервер.")
+        raise HTTPException(503, "AI Tutor пока недоступен. Попробуй позже — задания и планирование продолжают работать.")
     body = {
         "model": configured_model(), "instructions": instructions,
         "input": [{"role": "user", "content": [{

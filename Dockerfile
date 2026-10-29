@@ -1,8 +1,10 @@
-FROM node:22-bookworm-slim AS frontend
+FROM node:24-bookworm-slim AS frontend
 WORKDIR /build/frontend
-COPY frontend/package.json frontend/package-lock.json ./
+COPY package.json package-lock.json ./
 RUN npm ci --no-audit --no-fund
-COPY frontend/ ./
+COPY index.html vite.config.js ./
+COPY src/ ./src/
+COPY public/ ./public/
 RUN VITE_API_URL=/api VITE_REQUIRE_ACCESS_CODE=true npm run build
 
 FROM python:3.12-slim

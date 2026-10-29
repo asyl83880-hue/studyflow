@@ -1,0 +1,56 @@
+name: StudyFlow CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - run: npm test
+      - run: npm run build
+        env:
+          VITE_API_URL: /api
+          VITE_REQUIRE_ACCESS_CODE: 'true'
+
+  backend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: backend/requirements*.txt
+      - run: pip install -r backend/requirements-dev.txt
+      - run: python -m pytest backend/tests -q
+
+  docker:
+    needs: [frontend, backend]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build the actual production image
+        run: docker build --tag studyflow:ci .
+      - name: Check production startup and API access
+        run: |
+          docker run --detach --rm --name studyflow-ci --publish 127.0.0.1:8000:8000 --env STUDYFLOW_DEMO_ACCESS_CODE=ci-only-access studyflow:ci
+          timeout 30 bash -c 'until curl --fail --silent http://127.0.0.1:8000/api/health; do sleep 1; done'
+          curl --fail --silent http://127.0.0.1:8000/ > /dev/null
+          test "$(curl --silent --output /dev/null --write-out '%{http_code}' http://127.0.0.1:8000/api/tasks)" = 401
+          curl --fail --silent --header 'X-StudyFlow-Access-Code: ci-only-access' http://127.0.0.1:8000/api/tasks
+      - name: Show container logs on failure
+        if: failure()
+        run: docker logs studyflow-ci || true

@@ -10,7 +10,8 @@ from .main import app as api
 
 
 def create_app():
-    directory = Path(os.environ.get("STUDYFLOW_STATIC_DIR", "/app/frontend"))
+    default_directory = Path(__file__).resolve().parents[2] / "dist"
+    directory = Path(os.environ.get("STUDYFLOW_STATIC_DIR", str(default_directory)))
     if not (directory / "index.html").is_file():
         raise RuntimeError("Frontend не собран: проверь STUDYFLOW_STATIC_DIR.")
 
