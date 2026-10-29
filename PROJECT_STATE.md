@@ -9,9 +9,10 @@ AI сейчас заблокирован балансом OpenAI API: HTTP 429, 
 - Сайт: https://studyflow-27y8.onrender.com/
 - Публичный GitHub: https://github.com/asyl83880-hue/studyflow
 - PR с аккаунтами слит: https://github.com/asyl83880-hue/studyflow/pull/1.
-- Код Live: a7a0930340446e2c13c741bdc0123cc3f79bf31d.
+- Код Live: ac684e4206763e6a22be597d1141d75eeb68f3b7.
 - Render: srv-db3uichsrm7s73a9aseg, workspace tea-db3tnsmb7d7c739jl12g.
-- Последний проверенный Live: dep-dbhmjl8473hc73acukog — намеренный повторный выпуск того же кода для проверки сохранения данных.
+- Live исправления входа: dep-dbhn30i9lscs73a05r90.
+- Сохранение данных при повторном выпуске проверено на dep-dbhmjl8473hc73acukog.
 - Render Docker / Free / Frankfurt; React и FastAPI на одном домене; health /api/health.
 - Neon StudyFlow: nameless-heart-63557070, AWS Frankfurt, PostgreSQL 17.
 - Ветка production: br-sparkling-wildflower-b9wr6fnp, база studyflow.
@@ -57,10 +58,24 @@ Trusted origin: https://studyflow-27y8.onrender.com.
 Email/password включён; метод писем OTP, общий отправитель Neon.
 Обязательное подтверждение email остаётся выключено в исходных настройках провайдера.
 
+## Исправление пользовательского входа
+
+Сообщение «Войди в свой аккаунт ещё раз» воспроизведено с установленным SDK Neon 0.6:
+после getSession() вызов token() получает сохранённую сессию вместо обычного ответа
+/token. JWT находится в data.session.token, внедрённый SDK из заголовка set-auth-jwt.
+Приложение теперь поддерживает обе формы ответа; непрозрачный session cookie не
+передаётся как Bearer JWT. Проверка подписи и владельца на сервере сохранена.
+
+Регрессионный тест с настоящим SDK сначала воспроизвёл отказ старого кода,
+после исправления прошли все 10 клиентских тестов. Реальный Neon возвращает
+и открывает браузеру set-auth-jwt; этот JWT принят /api/auth/me со статусом 200.
+Публичный JS-файл после Live совпал по SHA-256 с проверенной локальной сборкой.
+Повторный вход непосредственно на устройстве пользователя ещё ожидает подтверждения.
+
 ## Подтверждённые проверки
 
-- Локально: 33 серверных теста. Ранее прошли 7 Node-тестов, npm ci и production build.
-- Актуальный CI: https://github.com/asyl83880-hue/studyflow/actions/runs/40904304923.
+- Локально: 33 серверных теста. Прошли 10 Node-тестов и production build; ранее выполнен npm ci.
+- Актуальный CI: https://github.com/asyl83880-hue/studyflow/actions/runs/40910044921.
   Успешны frontend, backend (SQLite), postgres (PostgreSQL 17), docker (сборка и запуск).
 - Настоящие подписи Ed25519, неверные/истёкшие токены, сбой IdP, изоляция владельцев,
   чужие ID, повторы, квоты, результаты и рестарт покрыты автоматическими тестами.

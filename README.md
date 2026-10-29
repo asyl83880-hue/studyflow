@@ -63,7 +63,7 @@ CI дополнительно выполняет те же API-проверки 
 В автоматическом учебном цикле заменён только внешний HTTP OpenAI.
 Реальный Neon Auth проверен. Доставка почтовых кодов ещё не подтверждена,
 а полный цикл с настоящим OpenAI заблокирован балансом API.
-Актуальный CI: https://github.com/asyl83880-hue/studyflow/actions/runs/40904304923.
+Актуальный CI: https://github.com/asyl83880-hue/studyflow/actions/runs/40910044921.
 
 Подготовка публикации и порядок переключения: [HOSTING_GUIDE.md](HOSTING_GUIDE.md).
 Актуальный статус: [PROJECT_STATE.md](PROJECT_STATE.md).
