@@ -1,4 +1,4 @@
-# Бесплатное демо. SQLite очищается при перезапуске или новом развёртывании.
+# Бесплатный сервер приложения. Аккаунты и данные хранятся в отдельном Neon PostgreSQL.
 services:
   - type: web
     name: studyflow
@@ -14,7 +14,15 @@ services:
         sync: false
       - key: OPENAI_MODEL
         value: gpt-4o-mini
-      - key: STUDYFLOW_DEMO_ACCESS_CODE
-        generateValue: true
-      - key: STUDYFLOW_DATABASE_URL
-        value: sqlite:////tmp/studyflow.db
+      - key: STUDYFLOW_POSTGRES_URL
+        sync: false
+      - key: STUDYFLOW_REQUIRE_POSTGRES
+        value: 'true'
+      - key: NEON_AUTH_BASE_URL
+        sync: false
+      - key: NEON_AUTH_JWKS_URL
+        sync: false
+      - key: STUDYFLOW_AI_USER_DAILY_LIMIT
+        value: '20'
+      - key: STUDYFLOW_AI_GLOBAL_DAILY_LIMIT
+        value: '100'

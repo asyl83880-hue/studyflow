@@ -1,10 +1,9 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
-import App from "./App";
-import HostingAccess from "./components/HostingAccess";
+import AuthGate from "./components/AuthGate";
 
 ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>
-    <HostingAccess><App /></HostingAccess>
+    <AuthGate />
   </React.StrictMode>
 );

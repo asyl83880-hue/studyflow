@@ -1,37 +1,28 @@
 # StudyFlow
 
-AI-навигатор школьника: задания, дедлайны, учебный план, объяснения и карта знаний.
+Персональный AI-навигатор школьника: задания, календарь, Smart Planner, Tutor,
+мини-тесты и карта знаний.
 
-**Сайт:** https://studyflow-27y8.onrender.com
+Существующий сайт: https://studyflow-27y8.onrender.com
 
-Главная страница публичная; вход в общее демо — с кодом доступа автора.
+## Версия с личными аккаунтами
 
-## Возможности
+Ветка `accounts-and-storage` готовит переход от общего демо к личным аккаунтам.
+До настройки Neon и слияния этой ветки опубликованный сайт остаётся прежним демо.
 
-- Задания вручную или по фото; результат распознавания сохраняется только после подтверждения.
-- Dashboard, календарь и Smart Planner с короткими учебными блоками.
-- AI Tutor: объяснения, примеры, практика и проверка ответа.
-- Мини-тест из пяти вопросов, разбор ошибок и Knowledge Map.
+- Регистрация, вход, выход, подтверждение почты и восстановление пароля — Neon Auth.
+- FastAPI проверяет короткий JWT по подписи Ed25519, issuer и сроку действия.
+- Задания, тесты, результаты, карта знаний и настройки браузера разделены по пользователям.
+- Хранилище — отдельный PostgreSQL в Neon; перезапуск Render не удаляет такую базу.
+- OpenAI-ключ остаётся на сервере; AI имеет дневные лимиты на пользователя и на весь сервис.
 
-Стек: React + Vite, Python 3.12 + FastAPI, SQLite + SQLAlchemy, OpenAI Responses API.
+## Стек
 
-## Структура
+React 19 / Vite / Node 24; FastAPI / Python 3.12 / SQLAlchemy;
+Neon PostgreSQL через psycopg; Managed Neon Auth; OpenAI Responses API.
+SQLite доступен для изолированных тестов и локальной разработки.
 
-```text
-src/                  React: App, components, utils, assets/fonts
-public/               favicon
-backend/app/          API, AI, planner, database, knowledge map
-backend/tests/        проверки размещённого API и учебного цикла
-tests/                проверки JS-клиента API
-demo/assignment.png   учебное изображение
-Dockerfile            React и API в одном контейнере
-render.yaml           бесплатный Docker Web Service
-PROJECT_STATE.md      актуальное состояние и ограничения
-```
-
-## Локальный запуск
-
-Требуются Node.js 24 и Python 3.12.
+## Запуск
 
 ```bash
 python -m venv .venv
@@ -41,8 +32,8 @@ pip install -r backend/requirements-dev.txt
 npm ci
 ```
 
-Скопируй `backend/.env.example` в `backend/.env` и добавь свой `OPENAI_API_KEY` для AI.
-Значения не нужно загружать в GitHub. Без ключа работают задания, календарь и план.
+Скопируй `backend/.env.example` в `backend/.env` и заполни настройки своей ветки Neon.
+Пароль базы и OPENAI_API_KEY нельзя загружать в GitHub.
 
 В двух терминалах из корня проекта:
 
@@ -54,26 +45,20 @@ python -m uvicorn backend.app.main:app --reload --host 127.0.0.1 --port 8000
 npm run dev
 ```
 
-Интерфейс: http://127.0.0.1:5173. API: http://127.0.0.1:8000/docs.
+Открой http://127.0.0.1:5173. В Neon Auth разреши origin этого интерфейса.
+Сервер берёт публичный Auth URL из своей конфигурации, отдельный VITE-ключ не нужен.
 
 ## Проверки
 
 ```bash
+python -m pytest backend/tests -q
 npm test
 npm run build
-python -m pytest backend/tests -q
 ```
 
-GitHub Actions также собирает настоящий Docker-образ. Подробности публикации: [HOSTING_GUIDE.md](HOSTING_GUIDE.md).
+CI дополнительно выполняет те же API-проверки на PostgreSQL 17 и собирает Docker.
+В автоматическом учебном цикле заменён только внешний HTTP OpenAI.
+Реальные Neon Auth, доставка писем и OpenAI должны быть проверены после настройки провайдеров.
 
-## Публичное демо
-
-Главная страница открыта. Для общего демопространства нужен приватный код автора:
-в текущем MVP задания и результаты общие, отдельных аккаунтов нет.
-AI-ключ используется только на сервере. Не публикуй его в frontend или GitHub.
-Бесплатный Render может засыпать; SQLite на бесплатном тарифе не переживает
-перезапуск или новое развёртывание. Используй учебные данные.
-
-Это MVP стартапа. Публикация подтверждена 29 октября 2026: Render Live,
-главная страница открывается, `/api/health` отвечает `status: ok`.
-Состояние и границы проверок смотри в PROJECT_STATE.md.
+Подготовка публикации и порядок переключения: [HOSTING_GUIDE.md](HOSTING_GUIDE.md).
+Актуальный статус: [PROJECT_STATE.md](PROJECT_STATE.md).
