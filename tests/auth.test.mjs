@@ -19,7 +19,7 @@ async function withProvider(callback, { jwtHeader = true } = {}) {
   const calls = [];
   globalThis.fetch = async (input, options = {}) => {
     const url = String(input);
-    calls.push({ url, headers: new Headers(options.headers) });
+    calls.push({ url, headers: new Headers(options.headers), body: options.body ? JSON.parse(options.body) : null });
     const headers = { "Content-Type": "application/json" };
     if (url.endsWith("/get-session")) {
       if (jwtHeader) headers["set-auth-jwt"] = jwt;
@@ -27,6 +27,7 @@ async function withProvider(callback, { jwtHeader = true } = {}) {
     }
     if (url.endsWith("/token")) return Response.json({ token: jwt });
     if (url.endsWith("/sign-out")) return Response.json({ success: true });
+    if (url.includes("/email-otp/")) return Response.json({ success: true });
     if (url.endsWith("/auth/me")) return Response.json({ id: "learner-a" });
     throw new Error("Unexpected test request");
   };
@@ -65,4 +66,20 @@ test("an opaque session cookie is never forwarded as a Bearer JWT", async () => 
     await assert.rejects(getCurrentIdentity(), /Войди в свой аккаунт/);
     assert.equal(calls.filter(call => call.url.endsWith("/auth/me")).length, 0);
   }, { jwtHeader: false });
+});
+
+test("managed verification and recovery methods use the supported SDK endpoints", async () => {
+  await withProvider(async (client, calls) => {
+    const email = "mail-check@example.test";
+    const otp = "000000"; // Synthetic fixture; never a real inbox code.
+    const password = "synthetic-test-password-only";
+    assert.equal((await client.emailOtp.sendVerificationOtp({ email, type: "forget-password" })).error, null);
+    assert.equal((await client.emailOtp.verifyEmail({ email, otp })).error, null);
+    assert.equal((await client.emailOtp.resetPassword({ email, otp, password })).error, null);
+    assert.deepEqual(calls.filter(call => call.url.includes("/email-otp/")).map(call => ({ path: new URL(call.url).pathname, body: call.body })), [
+      { path: "/studyflow/auth/email-otp/send-verification-otp", body: { email, type: "forget-password" } },
+      { path: "/studyflow/auth/email-otp/verify-email", body: { email, otp } },
+      { path: "/studyflow/auth/email-otp/reset-password", body: { email, otp, password } },
+    ]);
+  });
 });
