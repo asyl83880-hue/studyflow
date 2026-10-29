@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { getStudyPlan } from "../api";
+import { getStudyPlan, userStorageKey } from "../api";
 import { addDays, dateFromDayKey, formatDuration, localDayKey } from "../utils/dates";
 import { difficultyLabels } from "../utils/difficulty";
 import { Icon, LoadingState } from "./UI";
@@ -9,7 +9,7 @@ const defaults = { daily_limit: 120, horizon_days: 14, busy_minutes: {} };
 
 function savedSettings() {
   try {
-    const saved = JSON.parse(window.localStorage.getItem(storageKey));
+    const saved = JSON.parse(window.localStorage.getItem(userStorageKey(storageKey)));
     if (!saved || !Number.isInteger(saved.daily_limit) || saved.daily_limit < 15
       || saved.daily_limit > 480 || ![7, 14, 30].includes(saved.horizon_days)) return defaults;
     const busy_minutes = {};
@@ -76,7 +76,7 @@ export default function SmartPlanner({ tasks, now, taskActions }) {
     }
     const next = { daily_limit: limit, horizon_days: Number(draft.horizon_days), busy_minutes };
     setSettingsError(""); setSettings(next); setDraft(next);
-    try { window.localStorage.setItem(storageKey, JSON.stringify(next)); } catch { /* План работает и без сохранения настроек. */ }
+    try { window.localStorage.setItem(userStorageKey(storageKey), JSON.stringify(next)); } catch { /* План работает и без сохранения настроек. */ }
   }
 
   function changeBusy(key, value) {

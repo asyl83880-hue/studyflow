@@ -14,6 +14,7 @@
     "start": "python -m uvicorn backend.app.hosted:create_app --factory --host 0.0.0.0 --port ${PORT:-8000}"
   },
   "dependencies": {
+    "@neondatabase/auth": "0.6.0-beta",
     "react": "19.3.0",
     "react-dom": "19.3.0"
   },

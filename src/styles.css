@@ -1,6 +1,18 @@
 @font-face { font-family: Manrope; font-style: normal; font-display: swap; font-weight: 200 800; src: url('./assets/fonts/manrope-cyrillic-wght-normal.woff2') format('woff2'); unicode-range: U+0301,U+0400-045F,U+0490-0491,U+04B0-04B1,U+2116; }
 @font-face { font-family: Manrope; font-style: normal; font-display: swap; font-weight: 200 800; src: url('./assets/fonts/manrope-latin-wght-normal.woff2') format('woff2'); unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD; }
 :root { font-family: Manrope, system-ui, -apple-system, sans-serif; color: #20352e; background: #f4f7f5; font-synthesis: none; text-rendering: optimizeLegibility; -webkit-font-smoothing: antialiased; --green: #176b52; --green-hover: #10563f; --ink: #20352e; --muted: #596d61; --border: #e0e8e3; --mint: #edf6f0; --radius: 16px; --shadow: 0 2px 4px #243b2c03, 0 8px 28px #243b2c03; }
+.auth-card form { display: grid; gap: 18px; }
+.auth-card form > button { margin-top: 4px; }
+.auth-links { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; margin-top: 18px; }
+.auth-status, .auth-notice { margin: 20px 0; color: var(--green); }
+.auth-notice { padding: 14px; border-radius: 10px; background: var(--mint); }
+.account-card { display: flex; flex-wrap: wrap; align-items: center; gap: 9px; margin: 20px 8px 0; padding-top: 16px; border-top: 1px solid var(--border); }
+.account-avatar { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 50%; color: var(--green); background: var(--mint); font-weight: 800; }
+.account-card > div { min-width: 0; flex: 1; }
+.account-card strong, .account-card small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; }
+.account-card small { color: var(--muted); font-size: 10px; }
+.account-card button { min-height: 32px; font-size: 11px; }
+.auth-global-error { position: fixed; top: 8px; left: 50%; z-index: 100; max-width: 90vw; transform: translateX(-50%); padding: 14px 20px; border: 1px solid #efd8dc; border-radius: 10px; background: #fff2f3; color: #9e313a; }
 * { box-sizing: border-box; }
 body { margin: 0; font-size: 14px; line-height: 1.65; }
 [hidden] { display: none !important; }

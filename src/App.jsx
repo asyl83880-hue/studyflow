@@ -14,6 +14,7 @@ import {
   updateTask,
   deleteTask,
   completeTask,
+  userStorageKey,
 } from "./api";
 import { Brand, Icon, EmptyState, PageSkeleton } from "./components/UI";
 import Drawer from "./components/Drawer";
@@ -25,7 +26,11 @@ function Navigation({ pages, view, onNavigate }) {
   }
 
 
-export default function App() {
+function AccountPanel({ user, onSignOut, signingOut }) {
+  return <div className="account-card"><span className="account-avatar" aria-hidden="true">{(user?.name || user?.email || "У").slice(0, 1).toUpperCase()}</span><div><strong>{user?.name || "Мой аккаунт"}</strong><small>{user?.email}</small></div><button className="text-button" onClick={onSignOut} disabled={signingOut}>{signingOut ? "Выходим…" : "Выйти"}</button></div>;
+}
+
+export default function App({ user, onSignOut, signingOut }) {
   const [tasks, setTasks] = useState([]);
   const [editingTask, setEditingTask] = useState(null);
   const [formMode, setFormMode] = useState("manual");
@@ -40,7 +45,7 @@ export default function App() {
   const [now, setNow] = useState(() => new Date());
   const [selectedDay, setSelectedDay] = useState(() => localDayKey(new Date()));
   const [entered, setEntered] = useState(() => {
-    try { return localStorage.getItem("studyflow-ui-entered-v1") === "true"; } catch { return false; }
+    return true;
   });
   const [formOpen, setFormOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -67,7 +72,7 @@ export default function App() {
   }, [notice]);
 
   function enterApp() {
-    try { localStorage.setItem("studyflow-ui-entered-v1", "true"); } catch { /* Доступ к хранилищу необязателен. */ }
+    try { localStorage.setItem(userStorageKey("entered"), "true"); } catch { /* Доступ к хранилищу необязателен. */ }
     setEntered(true);
     requestAnimationFrame(() => document.getElementById("main-content")?.focus({ preventScroll: true }));
   }
@@ -252,7 +257,8 @@ export default function App() {
         <Brand onClick={() => setEntered(false)} />
         <Navigation pages={pages} view={view} onNavigate={navigate} />
         <div className="sidebar-note"><Icon name="spark" /><div><strong>В своём темпе</strong><span>Один понятный шаг за другим.</span></div></div>
-        <div className="sidebar-footer"><span className="status-dot" />{import.meta.env.VITE_REQUIRE_ACCESS_CODE === "true" ? "Демо · общие данные" : "Пространство для учёбы"}</div>
+        <AccountPanel user={user} onSignOut={onSignOut} signingOut={signingOut} />
+        <div className="sidebar-footer"><span className="status-dot" />Личное пространство</div>
       </aside>
       <div className="app-body">
         <header className="topbar"><div className="topbar-left"><button className="icon-button mobile-menu-button" aria-label="Открыть меню" onClick={() => setMenuOpen(true)}><Icon name="menu" /></button><span className="topbar-product">StudyFlow</span><Icon name="chevron" size={14} /><strong>{pages.find(page => page.id === view)?.title}</strong></div><span className="topbar-date"><Icon name="calendar" size={16} />{now.toLocaleDateString("ru-RU", { day: "numeric", month: "long" })}</span><button className="add-task-button" onClick={openNewTask} disabled={taskUnavailable}><Icon name="plus" />Новое задание</button></header>
@@ -267,7 +273,7 @@ export default function App() {
         </main>
       </div>
     </div>
-    <Drawer open={entered && menuOpen} onClose={() => setMenuOpen(false)} title="Разделы" id="navigation" side="left"><Navigation pages={pages} view={view} onNavigate={navigate} /></Drawer>
+    <Drawer open={entered && menuOpen} onClose={() => setMenuOpen(false)} title="Разделы" id="navigation" side="left"><Navigation pages={pages} view={view} onNavigate={navigate} /><AccountPanel user={user} onSignOut={onSignOut} signingOut={signingOut} /></Drawer>
     <Drawer open={entered && formOpen} onClose={() => setFormOpen(false)} title={editingTask && formMode === "manual" ? "Изменить задание" : "Новое задание"} id="task">
       <p className="drawer-description">Добавь детали — остальное станет частью твоего плана.</p>
       <div className="form-mode-switch" aria-label="Способ добавления задания"><button type="button" aria-pressed={formMode === "manual"} disabled={busy} onClick={() => setFormMode("manual")}><Icon name="edit" size={17} />Вручную</button><button type="button" aria-pressed={formMode === "photo"} disabled={busy} onClick={() => setFormMode("photo")}><Icon name="photo" size={17} />По фото</button></div>

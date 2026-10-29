@@ -93,7 +93,7 @@ def assess(observations, label):
     }
 
 
-def build_knowledge_map(db: Session):
+def build_knowledge_map(db: Session, owner_id: str):
     topics = {}
     topic_evidence = defaultdict(list)
     concept_evidence = defaultdict(list)
@@ -105,13 +105,13 @@ def build_knowledge_map(db: Session):
             topics[key] = {"subject": subject, "label": label, "concepts": {}}
         return key, topics[key]
 
-    for task in db.query(Task).order_by(Task.id):
+    for task in db.query(Task).filter_by(owner_id=owner_id).order_by(Task.id):
         remember(task.subject, task.topic)
 
     # Снимки, результаты и ответы читаются одним запросом. Не нужен запрос на каждую тему.
     rows = db.query(MiniTest, TestResult, TestAnswer).outerjoin(
         TestResult, MiniTest.id == TestResult.test_id,
-    ).outerjoin(TestAnswer, TestResult.test_id == TestAnswer.test_id).order_by(
+    ).outerjoin(TestAnswer, TestResult.test_id == TestAnswer.test_id).filter(MiniTest.owner_id == owner_id).order_by(
         MiniTest.created_at, MiniTest.id, TestAnswer.question_id,
     ).all()
     tests = {}

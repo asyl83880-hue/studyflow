@@ -5,7 +5,7 @@ RUN npm ci --no-audit --no-fund
 COPY index.html vite.config.js ./
 COPY src/ ./src/
 COPY public/ ./public/
-RUN VITE_API_URL=/api VITE_REQUIRE_ACCESS_CODE=true npm run build
+RUN VITE_API_URL=/api npm run build
 
 FROM python:3.12-slim
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 \

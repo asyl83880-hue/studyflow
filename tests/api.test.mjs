@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { getTasks, createTask, getTestHistory, recognizeTaskImage, checkDemoAccess, setAccessCode } from "../src/api.js";
+import { getTasks, createTask, getTestHistory, recognizeTaskImage, getAppConfig, setTokenProvider, setIdentity, userStorageKey } from "../src/api.js";
 
 async function compressTimeouts(operation) {
   const original = globalThis.setTimeout;
@@ -57,7 +57,7 @@ test("Фото передаётся multipart без вручную устано
   finally { globalThis.fetch = original; }
 });
 
-test("Код доступа передаётся заголовком, сохраняя заголовок защиты повтора", async () => {
+test("Короткая сессия передаётся Bearer-заголовком; публичная конфигурация не требует входа", async () => {
   const original = globalThis.fetch;
   const requests = [];
   globalThis.fetch = async (url, options) => {
@@ -65,15 +65,31 @@ test("Код доступа передаётся заголовком, сохр�
     return new Response(JSON.stringify({ status: "ok" }));
   };
   try {
-    setAccessCode("test-only-code");
-    await checkDemoAccess();
+    setTokenProvider(async () => "test-only-token");
+    await getAppConfig();
     await createTask({ subject: "Алгебра" }, "same-key");
-    assert.ok(requests[0].url.endsWith("/access/check"));
-    assert.equal(requests[0].options.headers["X-StudyFlow-Access-Code"], "test-only-code");
+    assert.ok(requests[0].url.endsWith("/config"));
+    assert.equal(requests[0].options.headers.Authorization, undefined);
+    assert.equal(requests[1].options.headers.Authorization, "Bearer test-only-token");
+    assert.equal(requests[1].options.credentials, "omit");
     assert.equal(requests[1].options.headers["Idempotency-Key"], "same-key");
     assert.equal(requests[1].options.headers["Content-Type"], "application/json");
-    setAccessCode("");
+    setTokenProvider(async () => "");
     await getTasks();
-    assert.equal(requests[2].options.headers["X-StudyFlow-Access-Code"], undefined);
-  } finally { setAccessCode(""); globalThis.fetch = original; }
+    assert.equal(requests[2].options.headers.Authorization, undefined);
+  } finally { setTokenProvider(async () => ""); globalThis.fetch = original; }
+});
+
+test("Настройки и ответы в браузере разделены по аккаунтам", () => {
+  setIdentity("alice");
+  const alice = userStorageKey("active-test");
+  setIdentity("bob");
+  assert.notEqual(userStorageKey("active-test"), alice);
+  setIdentity(null);
+});
+
+test("Зависшая проверка сессии тоже ограничена временем запроса", async () => {
+  setTokenProvider(() => new Promise(() => {}));
+  try { await compressTimeouts(() => assert.rejects(getTasks(), /не ответил вовремя/)); }
+  finally { setTokenProvider(async () => ""); }
 });

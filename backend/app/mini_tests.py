@@ -53,11 +53,11 @@ def request_fingerprint(request):
     return hashlib.sha256(encoded).hexdigest()
 
 
-def resolve_context(db: Session, request: TopicContext):
+def resolve_context(db: Session, request: TopicContext, owner_id: str):
     data = request.model_dump(exclude={"request_id"}, mode="json")
     data["task_description"] = None
     if request.task_id is not None:
-        task = db.get(Task, request.task_id)
+        task = db.query(Task).filter_by(id=request.task_id, owner_id=owner_id).first()
         if task is None:
             raise HTTPException(404, "Задание не найдено. Открой тему отдельно.")
         data.update(subject=task.subject, topic=task.topic, task_description=task.description)

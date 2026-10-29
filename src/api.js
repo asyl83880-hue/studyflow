@@ -1,34 +1,33 @@
 const API_URL = (import.meta.env?.VITE_API_URL ?? "http://127.0.0.1:8000").replace(/\/$/, "");
-let accessCode = "";
-
-export function getAccessCode() {
-  if (accessCode) return accessCode;
-  try { return sessionStorage.getItem("studyflow-demo-access") || ""; } catch { return ""; }
-}
-
-export function setAccessCode(value) {
-  accessCode = value;
-  try {
-    if (value) sessionStorage.setItem("studyflow-demo-access", value);
-    else sessionStorage.removeItem("studyflow-demo-access");
-  } catch { /* В памяти код работает и без браузерного хранилища. */ }
-}
+let tokenProvider = async () => "";
+let identity = "anonymous";
+export function setTokenProvider(provider) { tokenProvider = provider; }
+export function setIdentity(id) { identity = id || "anonymous"; }
+export function userStorageKey(key) { return `studyflow.user.${identity}:${key}`; }
 
 // Срок ожидания охватывает fetch и чтение тела. Отмена компонента сохраняется.
-async function request(path, { method = "GET", data, body, signal, headers = {}, timeout = 15_000 } = {}) {
+async function request(path, { method = "GET", data, body, signal, headers = {}, timeout = 15_000, authenticated = true } = {}) {
   const controller = new AbortController();
   let timedOut = false;
   const cancel = () => controller.abort();
   if (signal?.aborted) cancel();
   else signal?.addEventListener("abort", cancel, { once: true });
   const timer = setTimeout(() => { timedOut = true; controller.abort(); }, timeout);
+  let abortTokenWait;
   try {
-    const code = getAccessCode();
+    const token = authenticated ? await Promise.race([
+      tokenProvider(),
+      new Promise((_, reject) => {
+        abortTokenWait = () => reject(new DOMException("Aborted", "AbortError"));
+        if (controller.signal.aborted) abortTokenWait();
+        else controller.signal.addEventListener("abort", abortTokenWait, { once: true });
+      }),
+    ]) : "";
     const requestHeaders = { ...headers };
-    if (code) requestHeaders["X-StudyFlow-Access-Code"] = code;
+    if (token) requestHeaders.Authorization = `Bearer ${token}`;
     if (data !== undefined) requestHeaders["Content-Type"] = "application/json";
     const response = await fetch(`${API_URL}${path}`, {
-      method, signal: controller.signal,
+      method, signal: controller.signal, credentials: "omit",
       headers: requestHeaders,
       body: data === undefined ? body : JSON.stringify(data),
     });
@@ -37,6 +36,9 @@ async function request(path, { method = "GET", data, body, signal, headers = {},
       return null;
     });
     if (!response.ok) {
+      if (response.status === 401 && authenticated && typeof window !== "undefined") {
+        window.dispatchEvent(new Event("studyflow-session-expired"));
+      }
       throw new Error(typeof result?.detail === "string" ? result.detail
         : response.status === 422 ? "Проверь обязательные поля и допустимые значения."
           : "Не удалось получить ответ сервера. Повтори попытку.");
@@ -48,11 +50,13 @@ async function request(path, { method = "GET", data, body, signal, headers = {},
     throw error;
   } finally {
     clearTimeout(timer);
+    if (abortTokenWait) controller.signal.removeEventListener("abort", abortTokenWait);
     signal?.removeEventListener("abort", cancel);
   }
 }
 
-export const checkDemoAccess = () => request("/access/check");
+export const getAppConfig = () => request("/config", { authenticated: false, timeout: 65_000 });
+export const getCurrentIdentity = () => request("/auth/me");
 
 export const estimateTask = (data, signal) => request("/tasks/estimate", { method: "POST", data, signal });
 export const getStudyPlan = (data, signal) => request("/planner/preview", { method: "POST", data, signal });

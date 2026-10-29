@@ -6,32 +6,57 @@ run through the real application code.
 from datetime import datetime, timedelta, timezone
 from io import BytesIO
 import json
+import os
+from types import SimpleNamespace
 from uuid import uuid4
 
 import httpx
 from fastapi.testclient import TestClient
 from PIL import Image
 import pytest
+import jwt
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
+from sqlalchemy.engine import make_url
 
-from backend.app import main
+from backend.app import main, auth, hosted
 from backend.app.database import Base, configure_sqlite, get_db
 from backend.app.hosted import create_app
+
+SIGNING_KEY = Ed25519PrivateKey.generate()
+ISSUER = "https://auth.example.test"
+
+
+def access_token(owner="alice", **changes):
+    now = datetime.now(timezone.utc)
+    return jwt.encode({"sub": owner, "iss": ISSUER, "iat": now,
+                       "exp": now + timedelta(minutes=15), **changes}, SIGNING_KEY, algorithm="EdDSA", headers={"kid": "test"})
+
+
+def bearer(owner="alice"):
+    return {"Authorization": f"Bearer {access_token(owner)}"}
 
 
 @pytest.fixture
 def production(tmp_path, monkeypatch):
-    monkeypatch.setenv("STUDYFLOW_DEMO_ACCESS_CODE", "release-test-access")
+    monkeypatch.setenv("NEON_AUTH_BASE_URL", ISSUER + "/neondb/auth")
+    monkeypatch.setenv("NEON_AUTH_JWKS_URL", ISSUER + "/neondb/auth/jwks")
+    monkeypatch.setattr(auth, "jwks_client", lambda _: SimpleNamespace(get_signing_key_from_jwt=lambda _token: SimpleNamespace(key=SIGNING_KEY.public_key())))
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     static = tmp_path / "static"
     static.mkdir()
     (static / "index.html").write_text('<html lang="ru">StudyFlow</html>')
     monkeypatch.setenv("STUDYFLOW_STATIC_DIR", str(static))
-    db_engine = create_engine(f"sqlite:///{tmp_path / 'test.db'}", connect_args={"check_same_thread": False})
-    event.listen(db_engine, "connect", configure_sqlite)
+    database_url = os.getenv("STUDYFLOW_TEST_DATABASE_URL", f"sqlite:///{tmp_path / 'test.db'}")
+    if not database_url.startswith("sqlite:") and not make_url(database_url).database.endswith("_test"):
+        pytest.fail("Integration tests require a dedicated database ending in _test.")
+    db_engine = create_engine(database_url, connect_args={"check_same_thread": False} if database_url.startswith("sqlite:") else {})
+    if db_engine.dialect.name == "sqlite":
+        event.listen(db_engine, "connect", configure_sqlite)
     sessions = sessionmaker(bind=db_engine)
     monkeypatch.setattr(main, "engine", db_engine)
+    monkeypatch.setattr(hosted, "engine", db_engine)
 
     def database():
         with sessions() as session:
@@ -49,7 +74,7 @@ def production(tmp_path, monkeypatch):
 
 @pytest.fixture
 def authorized(production):
-    production.headers["X-StudyFlow-Access-Code"] = "release-test-access"
+    production.headers.update(bearer())
     return production
 
 
@@ -72,15 +97,15 @@ def png():
 def test_public_home_health_and_protected_data(production):
     assert production.get("/").status_code == 200
     assert production.get("/api/health").json() == {"status": "ok"}
-    for path in ["/api/tasks", "/api/knowledge-map", "/api/mini-tests", "/api/access/check"]:
+    for path in ["/api/tasks", "/api/knowledge-map", "/api/mini-tests", "/api/auth/me"]:
         assert production.get(path).status_code == 401
-    assert production.get("/api/tasks", headers={"X-StudyFlow-Access-Code": "wrong"}).status_code == 401
+    assert production.get("/api/tasks", headers={"Authorization": "Bearer wrong"}).status_code == 401
     assert production.get("/missing.js").status_code == 404
 
 
-def test_hosted_start_fails_without_private_access_code(production, monkeypatch):
-    monkeypatch.delenv("STUDYFLOW_DEMO_ACCESS_CODE")
-    with pytest.raises(RuntimeError, match="STUDYFLOW_DEMO_ACCESS_CODE"):
+def test_hosted_start_fails_without_identity_configuration(production, monkeypatch):
+    monkeypatch.delenv("NEON_AUTH_JWKS_URL")
+    with pytest.raises(RuntimeError, match="Neon Auth"):
         with TestClient(create_app()):
             pass
 
@@ -89,6 +114,15 @@ def test_hosted_start_fails_without_build(production, monkeypatch, tmp_path):
     monkeypatch.setenv("STUDYFLOW_STATIC_DIR", str(tmp_path / "missing"))
     with pytest.raises(RuntimeError, match="Frontend"):
         create_app()
+
+
+def test_public_account_mode_refuses_ephemeral_sqlite(production, monkeypatch):
+    if hosted.engine.dialect.name != "sqlite":
+        return
+    monkeypatch.setenv("STUDYFLOW_REQUIRE_POSTGRES", "true")
+    with pytest.raises(RuntimeError, match="PostgreSQL"):
+        with TestClient(create_app()):
+            pass
 
 
 def test_crud_deadline_and_completed_tasks_leave_plan(authorized):
@@ -183,12 +217,19 @@ def test_full_photo_plan_tutor_test_and_knowledge_flow(authorized, monkeypatch):
     assert len(test["questions"]) == 5
     assert "correct_index" not in response.text and "feedback" not in response.text
     assert authorized.post("/api/mini-tests", json=test_request).json()["id"] == test["id"]
+    bob = bearer("bob")
+    assert authorized.get("/api/mini-tests", headers=bob).json() == []
+    assert authorized.get(f'/api/mini-tests/{test["id"]}', headers=bob).status_code == 404
+    assert authorized.get("/api/knowledge-map", headers=bob).json()["subjects"] == []
     answers = {"answers": [{"question_id": f"q{i}", "choice_id": "B" if i < 5 else "A"} for i in range(1, 6)]}
     submission_url = f'/api/mini-tests/{test["id"]}/submit'
+    assert authorized.post(submission_url, headers=bob, json=answers).status_code == 404
     saved = authorized.post(submission_url, json=answers)
     assert saved.status_code == 200, saved.text
     assert saved.json()["score_percent"] == 80
     assert saved.json()["problem_topics"][0]["incorrect_count"] == 1
+    assert authorized.get(f'/api/test-results/{test["id"]}', headers=bob).status_code == 404
+    assert authorized.get("/api/test-results", headers=bob).json() == []
     assert authorized.post(submission_url, json=answers).json() == saved.json()
     answers["answers"][0]["choice_id"] = "A"
     assert authorized.post(submission_url, json=answers).status_code == 409
@@ -201,4 +242,86 @@ def test_full_photo_plan_tutor_test_and_knowledge_flow(authorized, monkeypatch):
     # Persisted snapshots survive deleting the source assignment.
     authorized.delete(f'/api/tasks/{task["id"]}')
     assert authorized.get(f'/api/test-results/{test["id"]}').json() == saved.json()
-    assert outgoing == ["studyflow_task_draft", "studyflow_lesson", "studyflow_mini_test"]
+    # A second account may reuse the same idempotency UUID without seeing Alice's snapshot.
+    bob_test = authorized.post("/api/mini-tests", headers=bob, json={**test_request, "task_id": None})
+    assert bob_test.status_code == 201
+    assert bob_test.json()["id"] != test["id"]
+    assert len(authorized.get("/api/mini-tests").json()) == 1
+    # Replaying the already-generated test did not spend another AI request.
+    monkeypatch.setenv("STUDYFLOW_AI_USER_DAILY_LIMIT", "3")
+    assert authorized.post("/api/tutor/message", json={**context, "task_id": None, "action": "explain"}).status_code == 429
+    monkeypatch.setenv("STUDYFLOW_AI_GLOBAL_DAILY_LIMIT", "4")
+    assert authorized.post("/api/tutor/message", headers=bearer("charlie"), json={**context, "task_id": None, "action": "explain"}).status_code == 429
+    assert outgoing == ["studyflow_task_draft", "studyflow_lesson", "studyflow_mini_test", "studyflow_mini_test"]
+
+
+@pytest.mark.parametrize("changes", [
+    {"iss": "https://another-project.example.test"},
+    {"exp": datetime(2000, 1, 1, tzinfo=timezone.utc)},
+    {"sub": ""}, {"sub": "x" * 65}, {"sub": None},
+    {"role": "anon"}, {"is_anonymous": True},
+])
+def test_identity_rejects_wrong_issuer_expiry_and_anonymous_tokens(production, changes):
+    token = access_token(**changes)
+    assert production.get("/api/tasks", headers={"Authorization": f"Bearer {token}"}).status_code == 401
+
+
+def test_identity_rejects_forgery_and_algorithm_confusion(production):
+    forged = jwt.encode({"sub": "alice", "iss": ISSUER, "iat": datetime.now(timezone.utc),
+                         "exp": datetime.now(timezone.utc) + timedelta(minutes=15)}, Ed25519PrivateKey.generate(), algorithm="EdDSA")
+    assert production.get("/api/tasks", headers={"Authorization": f"Bearer {forged}"}).status_code == 401
+    symmetric = jwt.encode({"sub": "alice", "iss": ISSUER}, "test-only-secret-at-least-32-characters-long", algorithm="HS256")
+    assert production.get("/api/tasks", headers={"Authorization": f"Bearer {symmetric}"}).status_code == 401
+
+
+def test_identity_provider_outage_is_recoverable_and_does_not_expose_token(production, monkeypatch):
+    def unavailable(_url):
+        raise jwt.PyJWKClientConnectionError("provider unreachable")
+    monkeypatch.setattr(auth, "jwks_client", unavailable)
+    token = access_token()
+    response = production.get("/api/tasks", headers={"Authorization": f"Bearer {token}"})
+    assert response.status_code == 503
+    assert token not in response.text
+    assert "provider unreachable" not in response.text
+
+
+def test_accounts_cannot_read_modify_plan_or_tutor_each_others_assignments(production, monkeypatch):
+    alice, bob = bearer("alice"), bearer("bob")
+    created = production.post("/api/tasks", headers=alice, json=task_data()).json()
+    path = f'/api/tasks/{created["id"]}'
+    assert production.get("/api/tasks", headers=bob).json() == []
+    assert production.put(path, headers=bob, json={"topic": "Changed"}).status_code == 404
+    assert production.patch(path + "/complete", headers=bob).status_code == 404
+    assert production.delete(path, headers=bob).status_code == 404
+    assert production.get("/api/tasks", headers=alice).json()[0]["topic"] == created["topic"]
+    assert production.post("/api/planner/preview", headers=bob, json={}).json()["pending_tasks"] == 0
+    assert production.get("/api/knowledge-map", headers=bob).json()["summary"]["topics_total"] == 0
+    assert production.get("/api/knowledge-map", headers=alice).json()["summary"]["topics_total"] == 1
+    # Foreign task IDs are rejected before an AI request or quota reservation.
+    assert production.post("/api/tutor/message", headers=bob, json={"subject": "X", "topic": "Y", "task_id": created["id"], "action": "explain"}).status_code == 404
+    assert production.post("/api/mini-tests", headers=bob, json={"subject": "X", "topic": "Y", "task_id": created["id"], "request_id": str(uuid4())}).status_code == 404
+
+
+def test_idempotency_keys_are_scoped_to_each_account(production):
+    key = str(uuid4())
+    body = task_data()
+    alice = production.post("/api/tasks", headers={**bearer("alice"), "Idempotency-Key": key}, json=body)
+    bob = production.post("/api/tasks", headers={**bearer("bob"), "Idempotency-Key": key}, json=body)
+    assert alice.status_code == bob.status_code == 201
+    assert alice.json()["id"] != bob.json()["id"]
+
+
+def test_private_records_survive_application_lifespan_restart(authorized):
+    task = authorized.post("/api/tasks", json=task_data()).json()
+    with TestClient(create_app()) as restarted:
+        assert restarted.get("/api/tasks", headers=bearer()).json()[0]["id"] == task["id"]
+
+
+def test_public_configuration_contains_no_credentials(production, monkeypatch):
+    monkeypatch.setenv("OPENAI_API_KEY", "test-only-key-do-not-return")
+    response = production.get("/api/config")
+    assert response.status_code == 200
+    assert response.json()["ai_ready"] is True
+    assert response.json()["auth_url"] == ISSUER + "/neondb/auth"
+    assert "test-only-key" not in response.text
+    assert production.get("/api/tasks", headers=bearer()).headers["cache-control"] == "no-store"

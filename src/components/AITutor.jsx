@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { createMiniTest, getMiniTest, getTestHistory, getTestResult, getTutorLesson, submitMiniTest } from "../api";
+import { createMiniTest, getMiniTest, getTestHistory, getTestResult, getTutorLesson, submitMiniTest, userStorageKey } from "../api";
 import MiniTest from "./MiniTest";
 import TestResult from "./TestResult";
 import { Icon, EmptyState, LoadingState } from "./UI";
@@ -13,8 +13,8 @@ const actions = [
   ["check_answer", "Проверь мой ответ"], ["mini_test", "Начать мини-тест"],
 ];
 const verdicts = { correct: "Верно", partly_correct: "Частично верно", incorrect: "Есть ошибка", cannot_check: "Нужно уточнить условие" };
-function readStorage(key) { try { return localStorage.getItem(key); } catch { return null; } }
-function saveStorage(key, value) { try { value === null ? localStorage.removeItem(key) : localStorage.setItem(key, value); } catch { /* Можно учиться и без localStorage. */ } }
+function readStorage(key) { try { return localStorage.getItem(userStorageKey(key)); } catch { return null; } }
+function saveStorage(key, value) { try { value === null ? localStorage.removeItem(userStorageKey(key)) : localStorage.setItem(userStorageKey(key), value); } catch { /* Можно учиться и без localStorage. */ } }
 function savedAnswers(test) {
   try {
     const data = JSON.parse(readStorage(answerKey(test.id)) || "{}");
