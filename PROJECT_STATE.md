@@ -75,7 +75,7 @@ Email/password включён; метод писем OTP, общий отпра�
 ## Подтверждённые проверки
 
 - Локально: 33 серверных теста. Прошли 11 Node-тестов и production build; ранее выполнен npm ci.
-- Актуальный CI: https://github.com/asyl83880-hue/studyflow/actions/runs/40910044921.
+- Актуальный CI: https://github.com/asyl83880-hue/studyflow/actions/runs/40936341791.
   Успешны frontend, backend (SQLite), postgres (PostgreSQL 17), docker (сборка и запуск).
 - Настоящие подписи Ed25519, неверные/истёкшие токены, сбой IdP, изоляция владельцев,
   чужие ID, повторы, квоты, результаты и рестарт покрыты автоматическими тестами.

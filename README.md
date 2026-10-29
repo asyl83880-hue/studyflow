@@ -64,7 +64,7 @@ CI дополнительно выполняет те же API-проверки 
 Реальный Neon Auth и доставка почтовых кодов проверены на тестовом алиасе.
 Принятие настоящего OTP/смена пароля ещё требуют ручной проверки: Gmail скрывает коды
 от автоматического доступа. Полный цикл с настоящим OpenAI заблокирован балансом API.
-Актуальный CI: https://github.com/asyl83880-hue/studyflow/actions/runs/40910044921.
+Актуальный CI: https://github.com/asyl83880-hue/studyflow/actions/runs/40936341791.
 
 Подготовка публикации и порядок переключения: [HOSTING_GUIDE.md](HOSTING_GUIDE.md).
 Актуальный статус: [PROJECT_STATE.md](PROJECT_STATE.md).
