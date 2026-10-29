@@ -12,6 +12,7 @@ from pydantic import ValidationError
 
 from .ai_schemas import RecognizedTask, prepare_draft
 from .image_uploads import PreparedImage
+from .ai_errors import record_provider_failure
 
 load_dotenv(Path(__file__).resolve().parent.parent / ".env", override=False)
 
@@ -75,6 +76,7 @@ async def recognize_image(image: PreparedImage) -> RecognizedTask:
     except httpx.RequestError:
         raise HTTPException(503, "Не удалось связаться с AI. Проверь подключение и повтори попытку.") from None
 
+    record_provider_failure(response, "recognize")
     if response.status_code in (401, 403):
         raise HTTPException(503, "AI недоступен: нужно проверить настройку ключа на сервере.")
     if response.status_code == 429:

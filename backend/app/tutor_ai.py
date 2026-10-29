@@ -10,6 +10,7 @@ from fastapi import HTTPException
 from pydantic import ValidationError
 
 from .tutor_schemas import GeneratedTest, Lesson
+from .ai_errors import record_provider_failure
 
 load_dotenv(Path(__file__).resolve().parent.parent / ".env", override=False)
 
@@ -93,6 +94,7 @@ async def request_structured(schema, name, instructions, context, max_tokens):
         raise HTTPException(504, "AI отвечает слишком долго. Повтори попытку — твои ответы останутся на экране.") from None
     except httpx.RequestError:
         raise HTTPException(503, "Не удалось связаться с AI. Проверь подключение и повтори попытку.") from None
+    record_provider_failure(response, "tutor")
     if response.status_code in (401, 403):
         raise HTTPException(503, "Нужно проверить ключ AI на сервере.")
     if response.status_code == 429:
