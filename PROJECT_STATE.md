@@ -2,14 +2,16 @@
 
 Дата: 30 октября 2026.
 Версия с личными аккаунтами и постоянной базой опубликована.
-AI сейчас заблокирован балансом OpenAI API: HTTP 429, credit_balance_exhausted.
+Последняя реальная проверка AI: провайдер OpenAI вернул HTTP 429, credit_balance_exhausted.
+Новый сервер переводит эту причину в понятную ошибку 503, ai_billing_unavailable.
 
 ## Адреса и инфраструктура
 
 - Сайт: https://studyflow-27y8.onrender.com/
 - Публичный GitHub: https://github.com/asyl83880-hue/studyflow
 - PR с аккаунтами слит: https://github.com/asyl83880-hue/studyflow/pull/1.
-- Код Live: ac684e4206763e6a22be597d1141d75eeb68f3b7.
+- Код Live: 772003f22a317b65a888a8b6364a04ad5d827047.
+- Live доработок почты и ошибок AI: dep-dbie9mgu01pc73c6sn60, 30 октября 2026.
 - Render: srv-db3uichsrm7s73a9aseg, workspace tea-db3tnsmb7d7c739jl12g.
 - Live исправления входа: dep-dbhn30i9lscs73a05r90.
 - Сохранение данных при повторном выпуске проверено на dep-dbhmjl8473hc73acukog.
@@ -52,6 +54,7 @@ task_request_keys, usage_counters. Пользователи/сессии — о�
 - STUDYFLOW_AI_USER_DAILY_LIMIT=20, STUDYFLOW_AI_GLOBAL_DAILY_LIMIT=100.
 
 /api/config отдаёт публичный Auth URL, ai_ready и persistent_storage без секретов.
+ai_ready означает только наличие ключа, а не проверку баланса или ответа AI.
 JWT хранится в памяти приложения; длительная сессия управляется провайдером.
 После выхода уже выданный JWT может действовать до конца короткого срока, до 15 минут.
 Trusted origin: https://studyflow-27y8.onrender.com.
@@ -75,7 +78,7 @@ Email/password включён; метод писем OTP, общий отпра�
 ## Подтверждённые проверки
 
 - Локально: 42 серверных теста. Прошли 15 Node-тестов и production build.
-- Актуальный CI: https://github.com/asyl83880-hue/studyflow/actions/runs/40936341791.
+- Актуальный CI: https://github.com/asyl83880-hue/studyflow/actions/runs/41109051767.
   Успешны frontend, backend (SQLite), postgres (PostgreSQL 17), docker (сборка и запуск).
 - Настоящие подписи Ed25519, неверные/истёкшие токены, сбой IdP, изоляция владельцев,
   чужие ID, повторы, квоты, результаты и рестарт покрыты автоматическими тестами.
@@ -109,6 +112,12 @@ sendVerificationOtp, verifyEmail и resetPassword (с синтетическим
 Платные ресурсы и платежи не создавались.
 
 ## Доработки 30 октября
+
+Выпуск опубликован. Успешны CI frontend, backend, PostgreSQL и Docker.
+Render подтвердил Live и штатную проверку готовности; ошибок приложения в журнале
+нового выпуска не найдено. В браузере главная загружается, подключён проверенный
+файл /assets/index-DgoEdnIF.js. Новые сценарии восстановления проверены с синтетическими
+данными в DOM; реальный почтовый код и устройство пользователя не проверялись.
 
 - AI различает исчерпанный баланс (503, ai_billing_unavailable), временное ограничение
   частоты (429, ai_rate_limited) и ошибку настройки (503, ai_configuration_error).
