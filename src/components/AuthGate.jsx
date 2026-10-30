@@ -34,11 +34,31 @@ export default function AuthGate() {
   const [password, setPassword] = useState("");
   const [confirmation, setConfirmation] = useState("");
   const [otp, setOtp] = useState("");
+  const [resendAt, setResendAt] = useState(0);
+  const [resendSeconds, setResendSeconds] = useState(0);
   const [retry, setRetry] = useState(0);
   const client = useRef(null);
   const activeUser = useRef(null);
   const version = useRef(0);
   const working = useRef(false);
+
+  useEffect(() => {
+    if (!resendAt) return;
+    let timer;
+    const update = () => {
+      const remaining = Math.max(0, Math.ceil((resendAt - Date.now()) / 1000));
+      setResendSeconds(remaining);
+      if (!remaining) window.clearInterval(timer);
+    };
+    update();
+    if (resendAt > Date.now()) timer = window.setInterval(update, 1000);
+    return () => window.clearInterval(timer);
+  }, [resendAt]);
+
+  function codeSent() {
+    setResendAt(Date.now() + 60_000);
+    setResendSeconds(60);
+  }
 
   async function acceptUser(account, expectedVersion = version.current) {
     clearAuthToken();
@@ -115,7 +135,7 @@ export default function AuthGate() {
       let result;
       if (mode === "forgot") {
         result = await client.current.emailOtp.sendVerificationOtp({ email: accountEmail, type: "forget-password" });
-        if (!result.error) { setMode("reset"); setNotice("Если аккаунт существует, код восстановления отправлен на почту."); }
+        if (!result.error) { codeSent(); setMode("reset"); setNotice("Если аккаунт существует, код восстановления отправлен на почту. Проверь также папку «Спам»."); }
       } else if (mode === "reset") {
         result = await client.current.emailOtp.resetPassword({ email: accountEmail, otp: otp.trim(), password });
         if (!result.error) { setMode("signin"); setPassword(""); setConfirmation(""); setOtp(""); setNotice("Пароль обновлён. Теперь войди в аккаунт."); }
@@ -128,10 +148,12 @@ export default function AuthGate() {
           : await client.current.signIn.email({ email: accountEmail, password });
         if (!result.error) {
           const session = await client.current.getSession();
+          if (session.error) throw new Error("Не удалось проверить вход. Проверь подключение и повтори попытку.");
           if (session.data?.user) { await acceptUser(session.data.user); notifyOtherTabs(); }
           else {
             const sent = await client.current.emailOtp.sendVerificationOtp({ email: accountEmail, type: "email-verification" });
             if (sent.error) throw new Error("Подтверди почту, прежде чем войти в аккаунт.");
+            codeSent();
             setMode("verify"); setNotice("Введи код подтверждения из письма.");
           }
         }
@@ -140,6 +162,7 @@ export default function AuthGate() {
         if (result.error.code === "EMAIL_NOT_VERIFIED") {
           const sent = await client.current.emailOtp.sendVerificationOtp({ email: accountEmail, type: "email-verification" });
           if (sent.error) throw new Error("Не удалось отправить код подтверждения. Повтори попытку позже.");
+          codeSent();
           setMode("verify"); setNotice("Введи код подтверждения из письма.");
         } else {
           throw new Error(mode === "signin" ? "Не удалось войти. Проверь почту и пароль."
@@ -147,6 +170,21 @@ export default function AuthGate() {
             : "Не удалось выполнить действие. Проверь поля и повтори попытку.");
         }
       }
+    } catch (failure) {
+      setError(failure instanceof TypeError ? "Не удалось подключиться. Проверь интернет и повтори." : failure.message);
+    } finally { working.current = false; setBusy(false); }
+  }
+
+  async function resendCode() {
+    if (working.current || !client.current || resendAt > Date.now() || !["verify", "reset"].includes(mode)) return;
+    working.current = true; setBusy(true); setError(""); setNotice("");
+    try {
+      const result = await client.current.emailOtp.sendVerificationOtp({
+        email: email.trim(), type: mode === "reset" ? "forget-password" : "email-verification",
+      });
+      if (result.error) throw new Error("Не удалось отправить код. Повтори попытку позже.");
+      codeSent(); setOtp("");
+      setNotice("Если аккаунт существует, новый код отправлен. Используй код из последнего письма; проверь также папку «Спам».");
     } catch (failure) {
       setError(failure instanceof TypeError ? "Не удалось подключиться. Проверь интернет и повтори." : failure.message);
     } finally { working.current = false; setBusy(false); }
@@ -182,6 +220,10 @@ export default function AuthGate() {
         {["signup", "reset"].includes(mode) && <label>Повтори пароль<input name="confirmation" type="password" autoComplete="new-password" value={confirmation} onChange={event => setConfirmation(event.target.value)} minLength={10} maxLength={128} required disabled={busy} /></label>}
         <button type="submit" disabled={busy}><Icon name="arrow" />{busy ? "Подожди…" : labels[mode]}</button>
       </form> : <button onClick={() => setRetry(value => value + 1)}>Повторить подключение</button>}
+      {["verify", "reset"].includes(mode) && <div className="auth-links">
+        <button type="button" className="text-button" disabled={busy || resendSeconds > 0} onClick={resendCode}>{resendSeconds > 0 ? `Отправить код повторно через ${resendSeconds} с` : "Отправить код повторно"}</button>
+        <button type="button" className="text-button" disabled={busy} onClick={() => changeMode(mode === "reset" ? "forgot" : "signin")}>Изменить почту</button>
+      </div>}
       <div className="auth-links">{mode === "signin" ? <><button className="text-button" disabled={busy} onClick={() => changeMode("signup")}>Создать аккаунт</button><button className="text-button" disabled={busy} onClick={() => changeMode("forgot")}>Забыли пароль?</button></> : <button className="text-button" disabled={busy} onClick={() => changeMode("signin")}>У меня уже есть аккаунт</button>}</div>
     </>}
     <p className="hosting-demo-note">Задания и результаты доступны только в твоём аккаунте.</p>

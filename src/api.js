@@ -39,9 +39,14 @@ async function request(path, { method = "GET", data, body, signal, headers = {},
       if (response.status === 401 && authenticated && typeof window !== "undefined") {
         window.dispatchEvent(new Event("studyflow-session-expired"));
       }
-      throw new Error(typeof result?.detail === "string" ? result.detail
+      const message = typeof result?.detail?.message === "string" ? result.detail.message
+        : typeof result?.detail === "string" ? result.detail
         : response.status === 422 ? "Проверь обязательные поля и допустимые значения."
-          : "Не удалось получить ответ сервера. Повтори попытку.");
+          : "Не удалось получить ответ сервера. Повтори попытку.";
+      const failure = new Error(message);
+      failure.status = response.status;
+      failure.code = typeof result?.detail?.code === "string" ? result.detail.code : null;
+      throw failure;
     }
     if (result === null) throw new Error("Сервер вернул неполный ответ. Повтори запрос.");
     return result;

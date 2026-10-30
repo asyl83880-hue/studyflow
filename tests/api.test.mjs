@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { getTasks, createTask, getTestHistory, recognizeTaskImage, getAppConfig, setTokenProvider, setIdentity, userStorageKey } from "../src/api.js";
+import { getTasks, createTask, getTestHistory, recognizeTaskImage, getTutorLesson, createMiniTest, getAppConfig, setTokenProvider, setIdentity, userStorageKey } from "../src/api.js";
 
 async function compressTimeouts(operation) {
   const original = globalThis.setTimeout;
@@ -92,4 +92,29 @@ test("Зависшая проверка сессии тоже ограничен
   setTokenProvider(() => new Promise(() => {}));
   try { await compressTimeouts(() => assert.rejects(getTasks(), /не ответил вовремя/)); }
   finally { setTokenProvider(async () => ""); }
+});
+
+test("Фото, Tutor и мини-тест показывают причину недоступности AI без автоматических повторов", async () => {
+  const original = globalThis.fetch;
+  let requests = 0;
+  const message = "AI временно недоступен: требуется пополнение баланса сервиса.";
+  globalThis.fetch = async () => {
+    requests += 1;
+    return Response.json({ detail: { code: "ai_billing_unavailable", message } }, { status: 503 });
+  };
+  try {
+    for (const operation of [
+      () => recognizeTaskImage(new File(["sample"], "task.png", { type: "image/png" })),
+      () => getTutorLesson({ subject: "Алгебра", topic: "Уравнения", action: "explain" }),
+      () => createMiniTest({ subject: "Алгебра", topic: "Уравнения" }),
+    ]) {
+      await assert.rejects(operation(), failure => {
+        assert.equal(failure.message, message);
+        assert.equal(failure.status, 503);
+        assert.equal(failure.code, "ai_billing_unavailable");
+        return true;
+      });
+    }
+    assert.equal(requests, 3);
+  } finally { globalThis.fetch = original; }
 });

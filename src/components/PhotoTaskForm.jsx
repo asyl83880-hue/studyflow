@@ -9,7 +9,7 @@ const emptyForm = {
 };
 const allowedTypes = ["image/jpeg", "image/png", "image/webp"];
 
-export default function PhotoTaskForm({ onConfirm, disabled }) {
+export default function PhotoTaskForm({ onConfirm, onManual, disabled }) {
   const [file, setFile] = useState(null);
   const [preview, setPreview] = useState("");
   const [imageError, setImageError] = useState(false);
@@ -170,6 +170,7 @@ export default function PhotoTaskForm({ onConfirm, disabled }) {
       </div>}
       {reading && <LoadingState>Загружаем фото и распознаём текст…</LoadingState>}
       {error && <p className="error photo-error" role="alert">{error}</p>}
+      {error && !draft && onManual && <button className="secondary" type="button" disabled={locked || reading} onClick={onManual}>Добавить задание вручную</button>}
       {notice && <p className="photo-success" role="status">{notice}</p>}
 
       {draft && <form className="task-form photo-review" onSubmit={confirm} aria-label="Проверка AI задания">

@@ -325,3 +325,48 @@ def test_public_configuration_contains_no_credentials(production, monkeypatch):
     assert response.json()["auth_url"] == ISSUER + "/neondb/auth"
     assert "test-only-key" not in response.text
     assert production.get("/api/tasks", headers=bearer()).headers["cache-control"] == "no-store"
+
+
+@pytest.mark.parametrize("operation", ["photo", "lesson", "mini-test"])
+@pytest.mark.parametrize("upstream_status,upstream_error,status,code", [
+    (429, {"code": "credit_balance_exhausted", "type": "insufficient_quota"}, 503, "ai_billing_unavailable"),
+    (429, {"code": "rate_limit_exceeded", "type": "rate_limit_error"}, 429, "ai_rate_limited"),
+    (401, {"code": "invalid_api_key", "type": "authentication_error"}, 503, "ai_configuration_error"),
+])
+def test_ai_outage_keeps_personal_data_and_manual_planning_available(
+    authorized, monkeypatch, operation, upstream_status, upstream_error, status, code,
+):
+    monkeypatch.setenv("OPENAI_API_KEY", "synthetic-key-never-expose")
+    existing = authorized.post("/api/tasks", json=task_data()).json()
+    baseline = authorized.get("/api/knowledge-map").json()
+    original = httpx.AsyncClient
+
+    def failed_provider(request):
+        assert request.url.host == "api.openai.com"
+        return httpx.Response(upstream_status, json={"error": {
+            **upstream_error, "message": "private-provider-detail-never-expose",
+        }})
+
+    monkeypatch.setattr(httpx, "AsyncClient", lambda **kwargs: original(**kwargs, transport=httpx.MockTransport(failed_provider)))
+    context = {"subject": existing["subject"], "topic": existing["topic"], "task_id": existing["id"]}
+    if operation == "photo":
+        response = authorized.post("/api/ai/recognize", files={"file": ("task.png", png(), "image/png")})
+    elif operation == "lesson":
+        response = authorized.post("/api/tutor/message", json={**context, "action": "explain"})
+    else:
+        response = authorized.post("/api/mini-tests", json={**context, "request_id": str(uuid4())})
+    assert response.status_code == status, response.text
+    assert response.json()["detail"]["code"] == code
+    assert "never-expose" not in response.text
+    if code == "ai_billing_unavailable":
+        assert "пополнение баланса" in response.json()["detail"]["message"]
+        assert "позже" not in response.text
+    assert authorized.get("/api/tasks").json() == [existing]
+    assert authorized.get("/api/mini-tests").json() == []
+    after_failure = authorized.get("/api/knowledge-map").json()
+    baseline.pop("generated_at")
+    after_failure.pop("generated_at")
+    assert after_failure == baseline
+    manual = authorized.post("/api/tasks", json=task_data(topic="Ручное задание после ошибки AI"))
+    assert manual.status_code == 201
+    assert authorized.post("/api/planner/preview", json={"timezone": "Asia/Almaty"}).json()["pending_tasks"] == 2

@@ -280,7 +280,7 @@ export default function App({ user, onSignOut, signingOut }) {
       {error && <div className="error" role="alert"><Icon name="warning" /><span>{error}</span></div>}
       {/* Формы остаются смонтированными: закрытие панели и навигация сохраняют черновики. */}
       <div hidden={formMode !== "manual"}><TaskForm onSubmit={handleSubmit} editingTask={editingTask} onCancelEdit={() => { setEditingTask(null); setFormOpen(false); }} disabled={taskUnavailable} saving={busy} /></div>
-      <div hidden={formMode !== "photo"}><PhotoTaskForm onConfirm={handleConfirmPhoto} disabled={taskUnavailable} /></div>
+      <div hidden={formMode !== "photo"}><PhotoTaskForm onConfirm={handleConfirmPhoto} onManual={() => setFormMode("manual")} disabled={taskUnavailable} /></div>
     </Drawer>
     {entered && notice && <div className="toast" role="status"><span className="toast-icon"><Icon name="check" size={17} /></span>{notice}<button className="icon-button" onClick={() => setNotice("")} aria-label="Закрыть уведомление"><Icon name="close" size={16} /></button></div>}
   </>;
