@@ -45,7 +45,7 @@ async function withForm(run) {
   dom.window.clearInterval = id => intervals.delete(id);
   const server = await createServer({
     cacheDir: resolve("node_modules/.vite-auth-form-tests"),
-    server: { middlewareMode: true, hmr: false },
+    server: { middlewareMode: true, hmr: false, ws: false },
     plugins: [{
       name: "isolated-auth-form-fixture", enforce: "pre",
       load(id) {

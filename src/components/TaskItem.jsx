@@ -13,9 +13,9 @@ export default function TaskItem({ task, onEdit, onDelete, onComplete, onOpenTut
 
       <div className="actions">
         {onOpenTutor && <button disabled={disabled} className="secondary tutor-task-button" onClick={() => onOpenTutor(task)}><Icon name="tutor" size={16} />Разобрать тему</button>}
-        {!task.completed && (
-          <button disabled={disabled} onClick={() => onComplete(task.id)}><Icon name="check" size={16} />Выполнено</button>
-        )}
+        <button disabled={disabled} className={task.completed ? "secondary" : undefined} onClick={() => onComplete(task.id)}>
+          <Icon name={task.completed ? "arrow" : "check"} size={16} />{task.completed ? "Вернуть в работу" : "Выполнено"}
+        </button>
 
         <button disabled={disabled} className="text-button" onClick={() => onEdit(task)}>
           Изменить

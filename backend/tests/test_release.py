@@ -135,6 +135,12 @@ def test_crud_deadline_and_completed_tasks_leave_plan(authorized):
     assert authorized.patch(f'/api/tasks/{task["id"]}/complete').json()["completed"] is True
     plan = authorized.post("/api/planner/preview", json={"timezone": "Asia/Almaty"}).json()
     assert plan["pending_tasks"] == 0
+    reopened = authorized.put(f'/api/tasks/{task["id"]}', json={"completed": False})
+    assert reopened.status_code == 200
+    assert reopened.json()["completed"] is False
+    assert reopened.json()["deadline"] == task["deadline"]
+    plan = authorized.post("/api/planner/preview", json={"timezone": "Asia/Almaty"}).json()
+    assert plan["pending_tasks"] == 1 and plan["planned_minutes"] == task["estimated_time"]
     assert authorized.delete(f'/api/tasks/{task["id"]}').status_code == 200
     assert authorized.get("/api/tasks").json() == []
 

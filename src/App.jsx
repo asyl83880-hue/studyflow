@@ -33,6 +33,7 @@ function AccountPanel({ user, onSignOut, signingOut }) {
 export default function App({ user, onSignOut, signingOut }) {
   const [tasks, setTasks] = useState([]);
   const [editingTask, setEditingTask] = useState(null);
+  const [deleteTarget, setDeleteTarget] = useState(null);
   const [formMode, setFormMode] = useState("manual");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
@@ -78,7 +79,14 @@ export default function App({ user, onSignOut, signingOut }) {
   }
 
   function navigate(page) { setView(page); setMenuOpen(false); }
-  function openNewTask() { setFormMode("photo"); setEditingTask(null); setFormOpen(true); }
+  function openNewTask() { setFormMode("manual"); setEditingTask(null); setFormOpen(true); }
+
+  function requestDelete(id) {
+    if (busy || loading || loadFailed) return;
+    const task = tasks.find(item => item.id === id);
+    if (!task) return;
+    setError(""); setDeleteTarget(task);
+  }
 
 
   // Обновляем «сегодня» и просроченные дедлайны, даже если вкладка открыта ночью.
@@ -161,6 +169,7 @@ export default function App({ user, onSignOut, signingOut }) {
       await deleteTask(id);
       setTasks((current) => current.filter((task) => task.id !== id));
       if (editingTask?.id === id) setEditingTask(null);
+      setDeleteTarget(null);
       setNotice("Задание удалено");
     } catch (failure) {
       setError(failure instanceof TypeError ? "Не удалось удалить задание. Проверь подключение и повтори." : failure.message);
@@ -193,15 +202,17 @@ export default function App({ user, onSignOut, signingOut }) {
 
   async function handleComplete(id) {
     if (mutationLock.current) return;
+    const task = tasks.find(item => item.id === id);
+    if (!task) return;
     mutationLock.current = true;
     setBusy(true);
     setError("");
     try {
-      const completed = await completeTask(id);
-      setTasks((current) => current.map((task) => task.id === id ? completed : task));
-      setNotice("Задание выполнено");
+      const updated = task.completed ? await updateTask(id, { completed: false }) : await completeTask(id);
+      setTasks((current) => current.map((item) => item.id === id ? updated : item));
+      setNotice(task.completed ? "Задание возвращено в работу" : "Задание выполнено");
     } catch (failure) {
-      setError(failure instanceof TypeError ? "Не удалось отметить задание выполненным. Проверь подключение и повтори." : failure.message);
+      setError(failure instanceof TypeError ? "Не удалось изменить статус задания. Проверь подключение и повтори." : failure.message);
     } finally {
       mutationLock.current = false;
       setBusy(false);
@@ -225,7 +236,7 @@ export default function App({ user, onSignOut, signingOut }) {
 
   const taskActions = {
     onEdit: handleEdit,
-    onDelete: handleDelete,
+    onDelete: requestDelete,
     onComplete: handleComplete,
     onOpenTutor: (task) => { setTutorTopic({ ...task, action: "explain" }); setView("tutor"); },
     disabled: busy || loading || loadFailed,
@@ -251,7 +262,7 @@ export default function App({ user, onSignOut, signingOut }) {
   const taskUnavailable = busy || loading || loadFailed;
   return <>
     <div hidden={entered}><StartPage onEnter={enterApp} /></div>
-    <div className="app-shell" hidden={!entered} inert={formOpen || menuOpen}>
+    <div className="app-shell" hidden={!entered} inert={formOpen || menuOpen || Boolean(deleteTarget)}>
       <a className="skip-link" href="#main-content">К содержимому</a>
       <aside className="sidebar">
         <Brand onClick={() => setEntered(false)} />
@@ -264,7 +275,7 @@ export default function App({ user, onSignOut, signingOut }) {
         <header className="topbar"><div className="topbar-left"><button className="icon-button mobile-menu-button" aria-label="Открыть меню" onClick={() => setMenuOpen(true)}><Icon name="menu" /></button><span className="topbar-product">StudyFlow</span><Icon name="chevron" size={14} /><strong>{pages.find(page => page.id === view)?.title}</strong></div><span className="topbar-date"><Icon name="calendar" size={16} />{now.toLocaleDateString("ru-RU", { day: "numeric", month: "long" })}</span><button className="add-task-button" onClick={openNewTask} disabled={taskUnavailable}><Icon name="plus" />Новое задание</button></header>
         <main id="main-content" className="main-content" tabIndex={-1}>
           <header className="page-header"><div><p className="eyebrow">{view === "dashboard" ? now.toLocaleDateString("ru-RU", { weekday: "long" }) : "ТВОЯ УЧЁБА"}</p><h1>{headings[view]}</h1><p className="subtitle">{hints[view]}</p></div>{view === "dashboard" && <span className="page-tag"><span className="status-dot" /> Всё в одном месте</span>}</header>
-          {error && !formOpen && (!loadFailed || view === "tutor" || view === "knowledge") && <div className="error" role="alert"><Icon name="warning" /><span>{error}</span>{loadFailed && <button className="secondary" disabled={loading} onClick={loadTasks}>Повторить загрузку</button>}</div>}
+          {error && !formOpen && !deleteTarget && (!loadFailed || view === "tutor" || view === "knowledge") && <div className="error" role="alert"><Icon name="warning" /><span>{error}</span>{loadFailed && <button className="secondary" disabled={loading} onClick={loadTasks}>Повторить загрузку</button>}</div>}
           <div className="workspace"><div className="view-content">
             <div hidden={view !== "tutor"}><AITutor initialTopic={tutorTopic} visible={entered && view === "tutor"} onTestCompleted={() => setKnowledgeRevision(value => value + 1)} onOpenKnowledgeMap={result => { setKnowledgeTarget({ topicKey: result.topic_key }); setView("knowledge"); }} /></div>
             <div hidden={view !== "knowledge"}><KnowledgeMap visible={entered && view === "knowledge"} revision={knowledgeRevision} initialTarget={knowledgeTarget} tasks={tasks} onOpenTutor={target => { if (target) setTutorTopic({ ...target }); setView("tutor"); }} /></div>
@@ -281,6 +292,17 @@ export default function App({ user, onSignOut, signingOut }) {
       {/* Формы остаются смонтированными: закрытие панели и навигация сохраняют черновики. */}
       <div hidden={formMode !== "manual"}><TaskForm onSubmit={handleSubmit} editingTask={editingTask} onCancelEdit={() => { setEditingTask(null); setFormOpen(false); }} disabled={taskUnavailable} saving={busy} /></div>
       <div hidden={formMode !== "photo"}><PhotoTaskForm onConfirm={handleConfirmPhoto} onManual={() => setFormMode("manual")} disabled={taskUnavailable} /></div>
+    </Drawer>
+    <Drawer open={entered && Boolean(deleteTarget)} onClose={() => { setDeleteTarget(null); setError(""); }} title="Удалить задание?" id="delete-task">
+      {deleteTarget && <>
+        <p className="drawer-description"><strong>{deleteTarget.subject} — {deleteTarget.topic}</strong></p>
+        <p className="section-hint">Задание исчезнет из списка, календаря и плана. Это действие нельзя отменить.</p>
+        {error && <div className="error" role="alert">{error}</div>}
+        <div className="actions">
+          <button className="secondary" disabled={busy} onClick={() => { setDeleteTarget(null); setError(""); }}>Отмена</button>
+          <button className="text-button danger" disabled={busy} onClick={() => handleDelete(deleteTarget.id)}>{busy ? "Удаляем…" : "Удалить задание"}</button>
+        </div>
+      </>}
     </Drawer>
     {entered && notice && <div className="toast" role="status"><span className="toast-icon"><Icon name="check" size={17} /></span>{notice}<button className="icon-button" onClick={() => setNotice("")} aria-label="Закрыть уведомление"><Icon name="close" size={16} /></button></div>}
   </>;

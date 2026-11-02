@@ -67,12 +67,17 @@ export default function SmartPlanner({ tasks, now, taskActions }) {
       setSettingsError("Укажи дневной лимит от 15 до 480 минут."); return;
     }
     const busy_minutes = {};
-    for (const key of upcomingDays) {
-      const value = Number(draft.busy_minutes[key] ?? 0);
+    // Смена периода меняет видимый план, а не уже сохранённые будущие дела.
+    for (const [key, savedValue] of Object.entries(draft.busy_minutes).sort(([a], [b]) => a.localeCompare(b))) {
+      if (key < today) continue;
+      const value = Number(savedValue);
       if (!Number.isInteger(value) || value < 0 || value > 1440) {
         setSettingsError("Для других дел укажи от 0 до 1440 минут."); return;
       }
       if (value) busy_minutes[key] = value;
+    }
+    if (Object.keys(busy_minutes).length > 60) {
+      setSettingsError("Можно сохранить занятость не более чем для 60 дат."); return;
     }
     const next = { daily_limit: limit, horizon_days: Number(draft.horizon_days), busy_minutes };
     setSettingsError(""); setSettings(next); setDraft(next);
