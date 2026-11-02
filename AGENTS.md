@@ -12,6 +12,7 @@
 - `src/api.js`, `src/auth.js`, `src/components/AuthGate.jsx` — запросы, сессия и формы аккаунта.
 - `backend/app/main.py`, `crud.py`, `schemas.py` — задания и их валидация.
 - `backend/app/planner.py`, `planner_routes.py` — планирование без внешнего AI.
+- `backend/app/ai_config.py`, `cloudflare_ai.py` — явный выбор AI и адаптер Cloudflare; `CLOUDFLARE_SETUP.md` — включение владельцем.
 - `backend/app/auth.py`, `database.py`, `models.py` — проверка владельца и хранение.
 - `tests/` — клиентские регрессии, включая формы React в изолированном DOM.
 - `backend/tests/` — серверные и интеграционные проверки; `.github/workflows/ci.yml` — PostgreSQL и Docker.

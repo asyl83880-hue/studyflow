@@ -9,7 +9,7 @@ const emptyForm = {
 };
 const allowedTypes = ["image/jpeg", "image/png", "image/webp"];
 
-export default function PhotoTaskForm({ onConfirm, onManual, disabled }) {
+export default function PhotoTaskForm({ onConfirm, onManual, disabled, aiProvider = "openai" }) {
   const [file, setFile] = useState(null);
   const [preview, setPreview] = useState("");
   const [imageError, setImageError] = useState(false);
@@ -70,7 +70,7 @@ export default function PhotoTaskForm({ onConfirm, onManual, disabled }) {
     let timedOut = false;
     const timer = window.setTimeout(() => { timedOut = true; controller.abort(); }, 65_000);
     try {
-      const result = await recognizeTaskImage(file, controller.signal);
+      const result = await recognizeTaskImage(file, controller.signal, aiProvider);
       if (id !== requestId.current) return;
       setDraft(result);
       setForm({
@@ -204,7 +204,7 @@ export default function PhotoTaskForm({ onConfirm, onManual, disabled }) {
           <button type="button" className="secondary" onClick={reset}>Отмена</button>
         </fieldset>
       </form>}
-      <p className="photo-privacy-note">После «Распознать» фото отправится в OpenAI для чтения текста. Проверь, что на нём только нужное задание.</p>
+      <p className="photo-privacy-note">После «Распознать» фото отправится в {aiProvider === "cloudflare" ? "Cloudflare Workers AI" : "OpenAI"} для чтения текста. Проверь, что на нём только нужное задание.</p>
     </section>
   );
 }

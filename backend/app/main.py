@@ -1,5 +1,4 @@
 from contextlib import asynccontextmanager
-import os
 from uuid import UUID
 
 from fastapi import FastAPI, Depends, Header, HTTPException
@@ -16,6 +15,7 @@ from .planner_routes import router as planner_router
 from .tutor_routes import router as tutor_router
 from .knowledge_routes import router as knowledge_router
 from .auth import require_user, auth_url
+from .ai_config import is_configured, provider_name
 
 
 @asynccontextmanager
@@ -70,7 +70,8 @@ def health(db: Session = Depends(get_db)):
 def config():
     return {
         "auth_url": auth_url() or None,
-        "ai_ready": bool(os.environ.get("OPENAI_API_KEY", "").strip()),
+        "ai_ready": is_configured(),
+        "ai_provider": provider_name(),
         "persistent_storage": engine.dialect.name == "postgresql",
     }
 

@@ -46,14 +46,21 @@ test("Создание сохраняет ключ повтора и безоп�
   } finally { globalThis.fetch = original; }
 });
 
-test("Фото передаётся multipart без вручную установленной boundary", async () => {
+test("Фото передаётся multipart с выбранным получателем без вручную установленной boundary", async () => {
   const original = globalThis.fetch;
+  const providers = [];
   globalThis.fetch = async (_url, options) => {
     assert.ok(options.body instanceof FormData);
     assert.equal(options.headers["Content-Type"], undefined);
+    providers.push(options.headers["X-StudyFlow-AI-Provider"]);
     return new Response(JSON.stringify({ has_task:true }));
   };
-  try { await recognizeTaskImage(new File(["sample"], "sample.png", { type:"image/png" })); }
+  try {
+    const file = new File(["sample"], "sample.png", { type:"image/png" });
+    await recognizeTaskImage(file);
+    await recognizeTaskImage(file, undefined, "cloudflare");
+    assert.deepEqual(providers, ["openai", "cloudflare"]);
+  }
   finally { globalThis.fetch = original; }
 });
 

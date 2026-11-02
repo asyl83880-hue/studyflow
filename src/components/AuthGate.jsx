@@ -37,6 +37,7 @@ export default function AuthGate() {
   const [resendAt, setResendAt] = useState(0);
   const [resendSeconds, setResendSeconds] = useState(0);
   const [retry, setRetry] = useState(0);
+  const [aiProvider, setAiProvider] = useState("openai");
   const client = useRef(null);
   const activeUser = useRef(null);
   const version = useRef(0);
@@ -77,6 +78,7 @@ export default function AuthGate() {
     getAppConfig().then(async config => {
       if (!active) return;
       if (!config.auth_url) throw new Error("Вход временно недоступен. Настройка сервиса ещё не завершена.");
+      setAiProvider(config.ai_provider === "cloudflare" ? "cloudflare" : "openai");
       client.current = configureAuth(config.auth_url);
       setReady(true);
       const session = await client.current.getSession();
@@ -202,7 +204,7 @@ export default function AuthGate() {
     finally { working.current = false; setSigningOut(false); }
   }
 
-  if (user) return <>{error && <div className="auth-global-error" role="alert">{error}</div>}<App key={user.id} user={user} onSignOut={signOut} signingOut={signingOut} /></>;
+  if (user) return <>{error && <div className="auth-global-error" role="alert">{error}</div>}<App key={user.id} user={user} aiProvider={aiProvider} onSignOut={signOut} signingOut={signingOut} /></>;
   if (!showAuth) return <StartPage onEnter={() => { setShowAuth(true); }} />;
   const titles = { signin: "С возвращением", signup: "Твоё пространство для учёбы", forgot: "Восстановить доступ", reset: "Новый пароль", verify: "Подтверди почту" };
   const labels = { signin: "Войти", signup: "Создать аккаунт", forgot: "Отправить код", reset: "Сохранить пароль", verify: "Подтвердить почту" };

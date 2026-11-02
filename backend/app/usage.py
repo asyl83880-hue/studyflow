@@ -8,6 +8,7 @@ from sqlalchemy import delete, update
 from sqlalchemy.exc import IntegrityError
 
 from .models import UsageCounter
+from .ai_config import require_configured
 
 
 def reserve(db, scope: str, limit: int):
@@ -34,7 +35,6 @@ def reserve(db, scope: str, limit: int):
 
 
 def reserve_ai_request(db, owner_id: str):
-    if not os.environ.get("OPENAI_API_KEY", "").strip():
-        raise HTTPException(503, "AI пока не настроен. Задания, календарь и планирование доступны.")
+    require_configured()
     reserve(db, f"ai:user:{owner_id}", int(os.getenv("STUDYFLOW_AI_USER_DAILY_LIMIT", "20")))
     reserve(db, "ai:global", int(os.getenv("STUDYFLOW_AI_GLOBAL_DAILY_LIMIT", "100")))

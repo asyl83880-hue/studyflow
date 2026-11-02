@@ -1,6 +1,6 @@
 """Release checks against the mounted production API and an isolated SQLite DB.
 
-Only OpenAI HTTP is replaced in the learning flow; parsing, grading and storage
+Only provider HTTP is replaced in the learning flow; parsing, grading and storage
 run through the real application code.
 """
 from datetime import datetime, timedelta, timezone
@@ -44,6 +44,9 @@ def production(tmp_path, monkeypatch):
     monkeypatch.setenv("NEON_AUTH_JWKS_URL", ISSUER + "/neondb/auth/jwks")
     monkeypatch.setattr(auth, "jwks_client", lambda _: SimpleNamespace(get_signing_key_from_jwt=lambda _token: SimpleNamespace(key=SIGNING_KEY.public_key())))
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.setenv("STUDYFLOW_AI_PROVIDER", "openai")
+    for name in ("CLOUDFLARE_ACCOUNT_ID", "CLOUDFLARE_API_TOKEN", "CLOUDFLARE_MODEL"):
+        monkeypatch.delenv(name, raising=False)
     static = tmp_path / "static"
     static.mkdir()
     (static / "index.html").write_text('<html lang="ru">StudyFlow</html>')
@@ -92,6 +95,95 @@ def png():
     output = BytesIO()
     Image.new("RGB", (40, 30), "white").save(output, format="PNG")
     return output.getvalue()
+
+
+@pytest.fixture
+def cloudflare(authorized, monkeypatch):
+    monkeypatch.setenv("STUDYFLOW_AI_PROVIDER", "cloudflare")
+    monkeypatch.setenv("CLOUDFLARE_ACCOUNT_ID", "a" * 32)
+    monkeypatch.setenv("CLOUDFLARE_API_TOKEN", "synthetic-cloudflare-secret")
+    # A configured legacy key must never cause fallback to another recipient.
+    monkeypatch.setenv("OPENAI_API_KEY", "synthetic-openai-secret")
+    authorized.headers["X-StudyFlow-AI-Provider"] = "cloudflare"
+    return authorized
+
+
+@pytest.mark.parametrize("name,value", [
+    ("CLOUDFLARE_API_TOKEN", ""),
+    ("CLOUDFLARE_ACCOUNT_ID", "../other-account"),
+    ("CLOUDFLARE_MODEL", "@cf/unknown/paid-model"),
+    ("STUDYFLOW_AI_PROVIDER", "other"),
+])
+def test_invalid_cloudflare_configuration_stops_before_http(cloudflare, monkeypatch, name, value):
+    monkeypatch.setenv(name, value)
+    def forbidden(**kwargs):
+        pytest.fail("Invalid configuration must not contact a provider")
+    monkeypatch.setattr(httpx, "AsyncClient", forbidden)
+    config = cloudflare.get("/api/config")
+    assert config.json()["ai_ready"] is False
+    assert "secret" not in config.text and "a" * 32 not in config.text
+    response = cloudflare.post("/api/tutor/message", json={"subject": "Алгебра", "topic": "Уравнения", "action": "explain"})
+    assert response.status_code == 503
+    assert response.json()["detail"]["code"] == "ai_not_configured"
+    assert cloudflare.post("/api/tasks", json=task_data()).status_code == 201
+
+
+@pytest.mark.parametrize("upstream_status,upstream_code,status,code", [
+    (429, 3036, 429, "ai_free_quota_exhausted"),
+    (200, 3036, 429, "ai_free_quota_exhausted"),
+    (429, 3040, 429, "ai_rate_limited"),
+    (403, 5035, 503, "ai_model_unavailable"),
+    (401, 10000, 503, "ai_configuration_error"),
+    (503, "private-upstream-detail", 502, None),
+])
+def test_cloudflare_failure_never_falls_back_or_exposes_details(cloudflare, monkeypatch, caplog, upstream_status, upstream_code, status, code):
+    calls = []
+    original = httpx.AsyncClient
+    def upstream(request):
+        calls.append(request)
+        assert request.url.host == "api.cloudflare.com"
+        return httpx.Response(upstream_status, json={"success": False, "errors": [{
+            "code": upstream_code, "message": "private-upstream-detail synthetic-cloudflare-secret",
+        }]})
+    monkeypatch.setattr(httpx, "AsyncClient", lambda **kwargs: original(**kwargs, transport=httpx.MockTransport(upstream)))
+    response = cloudflare.post("/api/mini-tests", json={"subject": "Алгебра", "topic": "Уравнения", "request_id": str(uuid4())})
+    assert response.status_code == status, response.text
+    if code:
+        assert response.json()["detail"]["code"] == code
+    assert len(calls) == 1
+    assert "private-upstream-detail" not in response.text + caplog.text
+    assert "synthetic-cloudflare-secret" not in response.text + caplog.text
+    assert cloudflare.get("/api/mini-tests").json() == []
+    assert cloudflare.post("/api/tasks", json=task_data()).status_code == 201
+
+
+@pytest.mark.parametrize("choice,status", [
+    ({"finish_reason": "length", "message": {"content": "{}"}}, 502),
+    ({"finish_reason": "stop", "message": {"content": "{}"}}, 502),
+    ({"finish_reason": "stop", "message": {"content": "not JSON"}}, 502),
+    ({"finish_reason": "content_filter", "message": {}}, 422),
+    (None, 502),
+])
+def test_cloudflare_incomplete_or_invalid_data_is_never_saved(cloudflare, monkeypatch, choice, status):
+    original = httpx.AsyncClient
+    monkeypatch.setattr(httpx, "AsyncClient", lambda **kwargs: original(**kwargs, transport=httpx.MockTransport(
+        lambda request: httpx.Response(200, json={"choices": [choice]}))))
+    response = cloudflare.post("/api/mini-tests", json={"subject": "Алгебра", "topic": "Уравнения", "request_id": str(uuid4())})
+    assert response.status_code == status, response.text
+    assert cloudflare.get("/api/mini-tests").json() == []
+
+
+@pytest.mark.parametrize("disclosed_provider", [None, "openai"])
+def test_cloudflare_photo_requires_current_recipient_disclosure(cloudflare, monkeypatch, disclosed_provider):
+    cloudflare.headers.pop("X-StudyFlow-AI-Provider")
+    if disclosed_provider:
+        cloudflare.headers["X-StudyFlow-AI-Provider"] = disclosed_provider
+    def forbidden(**kwargs):
+        pytest.fail("Stale photo disclosure must not send an image")
+    monkeypatch.setattr(httpx, "AsyncClient", forbidden)
+    response = cloudflare.post("/api/ai/recognize", files={"file": ("task.png", png(), "image/png")})
+    assert response.status_code == 409
+    assert cloudflare.get("/api/config").json()["ai_provider"] == "cloudflare"
 
 
 def test_public_home_health_and_protected_data(production):
@@ -172,15 +264,33 @@ def test_image_validation_and_missing_ai_are_recoverable(authorized):
     assert authorized.get("/api/tasks").json() == []
 
 
-def test_full_photo_plan_tutor_test_and_knowledge_flow(authorized, monkeypatch):
+@pytest.mark.parametrize("provider", ["openai", "cloudflare"])
+def test_full_photo_plan_tutor_test_and_knowledge_flow(authorized, monkeypatch, provider):
     monkeypatch.setenv("OPENAI_API_KEY", "test-only-not-a-real-key")
+    monkeypatch.setenv("STUDYFLOW_AI_PROVIDER", provider)
+    if provider == "cloudflare":
+        monkeypatch.setenv("CLOUDFLARE_ACCOUNT_ID", "a" * 32)
+        monkeypatch.setenv("CLOUDFLARE_API_TOKEN", "synthetic-cloudflare-token")
+        authorized.headers["X-StudyFlow-AI-Provider"] = provider
     outgoing = []
 
     def openai(request):
         body = json.loads(request.content)
-        assert str(request.url) == "https://api.openai.com/v1/responses"
         assert body["store"] is False
-        name = body["text"]["format"]["name"]
+        if provider == "openai":
+            assert str(request.url) == "https://api.openai.com/v1/responses"
+            name = body["text"]["format"]["name"]
+        else:
+            assert str(request.url) == f'https://api.cloudflare.com/client/v4/accounts/{"a" * 32}/ai/v1/chat/completions'
+            assert request.headers["authorization"] == "Bearer synthetic-cloudflare-token"
+            assert body["response_format"] == {"type": "json_object"}
+            assert body["chat_template_kwargs"]["enable_thinking"] is False
+            content = body["messages"][-1]["content"]
+            if isinstance(content, list):
+                name = "studyflow_task_draft"
+                assert content[1]["image_url"]["url"].startswith("data:image/")
+            else:
+                name = "studyflow_lesson" if "action" in json.loads(content) else "studyflow_mini_test"
         outgoing.append(name)
         if name == "studyflow_task_draft":
             data = {
@@ -200,6 +310,10 @@ def test_full_photo_plan_tutor_test_and_knowledge_flow(authorized, monkeypatch):
                              "error_type": "none" if j == 2 else "calculation"} for j in range(1, 5)],
                 "correct_index": 1, "explanation": "Вычти одинаковое число из обеих частей.",
             } for i in range(1, 6)]}
+        if provider == "cloudflare":
+            return httpx.Response(200, json={"choices": [{"finish_reason": "stop", "message": {
+                "role": "assistant", "content": json.dumps(data, ensure_ascii=False),
+            }}]})
         return httpx.Response(200, json={"status": "completed", "output": [{"type": "message", "content": [
             {"type": "output_text", "text": json.dumps(data, ensure_ascii=False)}]}]})
 

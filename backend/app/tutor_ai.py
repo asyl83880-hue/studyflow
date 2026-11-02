@@ -11,6 +11,8 @@ from pydantic import ValidationError
 
 from .tutor_schemas import GeneratedTest, Lesson
 from .ai_errors import check_provider_response
+from .ai_config import provider_name, configured_model
+from . import cloudflare_ai
 
 load_dotenv(Path(__file__).resolve().parent.parent / ".env", override=False)
 
@@ -65,11 +67,12 @@ reading, procedure или other. explanation — короткий разбор �
 """
 
 
-def configured_model():
-    return os.getenv("OPENAI_MODEL", "gpt-4o-mini").strip() or "gpt-4o-mini"
-
-
 async def request_structured(schema, name, instructions, context, max_tokens):
+    if provider_name() == "cloudflare":
+        return await cloudflare_ai.request_structured(
+            schema, instructions, context, max_tokens,
+            operation="mini_test" if name == "studyflow_mini_test" else "tutor",
+        )
     key = os.getenv("OPENAI_API_KEY", "").strip()
     if not key:
         raise HTTPException(503, "AI Tutor пока недоступен. Попробуй позже — задания и планирование продолжают работать.")

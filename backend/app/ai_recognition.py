@@ -13,6 +13,8 @@ from pydantic import ValidationError
 from .ai_schemas import RecognizedTask, prepare_draft
 from .image_uploads import PreparedImage
 from .ai_errors import check_provider_response
+from .ai_config import provider_name
+from . import cloudflare_ai
 
 load_dotenv(Path(__file__).resolve().parent.parent / ".env", override=False)
 
@@ -45,6 +47,12 @@ has_task=true: верни эти поля, остальные null и укажи
 
 
 async def recognize_image(image: PreparedImage) -> RecognizedTask:
+    if provider_name() == "cloudflare":
+        result = await cloudflare_ai.request_structured(
+            RecognizedTask, INSTRUCTIONS, {"request": "Извлеки одно задание с изображения. Ничего не сохраняй."},
+            2200, image=image, operation="recognize",
+        )
+        return prepare_draft(result)
     api_key = os.getenv("OPENAI_API_KEY", "").strip()
     if not api_key:
         raise HTTPException(503, "Распознавание пока не настроено. Можно добавить задание вручную.")

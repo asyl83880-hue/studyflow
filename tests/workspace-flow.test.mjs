@@ -43,6 +43,15 @@ function taskAPI(initial = [task]) {
   };
 }
 
+test("the photo form discloses Cloudflare before an image is uploaded", async () => {
+  await withUI("/src/App.jsx", { user, aiProvider: "cloudflare" }, taskAPI([]), async ({ click }) => {
+    await click("Новое задание");
+    await click("По фото");
+    assert.match(document.body.textContent, /Cloudflare Workers AI/);
+    assert.doesNotMatch(document.body.textContent, /OpenAI/);
+  });
+});
+
 test("a new task opens the manual form and can be saved without AI", async () => {
   const fixture = taskAPI([]);
   await withUI("/src/App.jsx", { user }, fixture, async ({ click, fill, submit, button, act }) => {

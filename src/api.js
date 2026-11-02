@@ -73,10 +73,10 @@ export const updateTask = (id, data) => request(`/tasks/${id}`, { method: "PUT",
 export const deleteTask = (id) => request(`/tasks/${id}`, { method: "DELETE" });
 export const completeTask = (id) => request(`/tasks/${id}/complete`, { method: "PATCH" });
 
-export function recognizeTaskImage(file, signal) {
+export function recognizeTaskImage(file, signal, aiProvider = "openai") {
   const body = new FormData();
   body.append("file", file);
-  return request("/ai/recognize", { method: "POST", body, signal, timeout: 65_000 });
+  return request("/ai/recognize", { method: "POST", body, signal, timeout: 65_000, headers: { "X-StudyFlow-AI-Provider": aiProvider } });
 }
 
 export const getTutorLesson = (data, signal) => request("/tutor/message", { method: "POST", data, signal, timeout: 75_000 });

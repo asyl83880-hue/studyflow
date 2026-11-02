@@ -30,7 +30,7 @@ function AccountPanel({ user, onSignOut, signingOut }) {
   return <div className="account-card"><span className="account-avatar" aria-hidden="true">{(user?.name || user?.email || "У").slice(0, 1).toUpperCase()}</span><div><strong>{user?.name || "Мой аккаунт"}</strong><small>{user?.email}</small></div><button className="text-button" onClick={onSignOut} disabled={signingOut}>{signingOut ? "Выходим…" : "Выйти"}</button></div>;
 }
 
-export default function App({ user, onSignOut, signingOut }) {
+export default function App({ user, onSignOut, signingOut, aiProvider = "openai" }) {
   const [tasks, setTasks] = useState([]);
   const [editingTask, setEditingTask] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
@@ -291,7 +291,7 @@ export default function App({ user, onSignOut, signingOut }) {
       {error && <div className="error" role="alert"><Icon name="warning" /><span>{error}</span></div>}
       {/* Формы остаются смонтированными: закрытие панели и навигация сохраняют черновики. */}
       <div hidden={formMode !== "manual"}><TaskForm onSubmit={handleSubmit} editingTask={editingTask} onCancelEdit={() => { setEditingTask(null); setFormOpen(false); }} disabled={taskUnavailable} saving={busy} /></div>
-      <div hidden={formMode !== "photo"}><PhotoTaskForm onConfirm={handleConfirmPhoto} onManual={() => setFormMode("manual")} disabled={taskUnavailable} /></div>
+      <div hidden={formMode !== "photo"}><PhotoTaskForm onConfirm={handleConfirmPhoto} onManual={() => setFormMode("manual")} disabled={taskUnavailable} aiProvider={aiProvider} /></div>
     </Drawer>
     <Drawer open={entered && Boolean(deleteTarget)} onClose={() => { setDeleteTarget(null); setError(""); }} title="Удалить задание?" id="delete-task">
       {deleteTarget && <>
