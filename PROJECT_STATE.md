@@ -10,7 +10,8 @@
 - Сайт: https://studyflow-27y8.onrender.com/
 - Публичный GitHub: https://github.com/asyl83880-hue/studyflow
 - PR с аккаунтами слит: https://github.com/asyl83880-hue/studyflow/pull/1.
-- Код Live: 679830fa5219faeba43e74aed349b2c5b6199f7e.
+- Код Live: 28542ccafcfe750897482e54515a7a525604ecaf.
+- Live адаптера Cloudflare: dep-dbkao415efls73etimk0, 2 ноября 2026.
 - Live обычных функций: dep-dbk9l5u417fc73bp0h0g, 2 ноября 2026.
 - Live доработок почты и ошибок AI: dep-dbie9mgu01pc73c6sn60, 30 октября 2026.
 - Render: srv-db3uichsrm7s73a9aseg, workspace tea-db3tnsmb7d7c739jl12g.
@@ -218,7 +219,15 @@ Workers AI для фото, Tutor и мини-тестов. Единственн
   Полный учебный цикл с подменённым HTTP пройден для обоих адаптеров.
   Проверены отказ квоты, неверная конфигурация, неизвестная модель, отсутствие
   fallback, секреты в ошибках/логах, неполные ответы и отображение получателя фото.
-- Публикация этого адаптера: ожидает CI/Render. Настройки live AI не переключались.
+- Публикация адаптера подтверждена: Render Live dep-dbkao415efls73etimk0,
+  коммит 28542ccafcfe750897482e54515a7a525604ecaf. Настройки live AI не переключались.
+- CI https://github.com/asyl83880-hue/studyflow/actions/runs/41471900171:
+  успешны frontend, backend, PostgreSQL и Docker.
+- Публичная главная и health отвечают 200; без входа tasks — 401. Секретных полей
+  в /api/config нет, ai_provider=openai, persistent_storage=true.
+  Файл /assets/index-Dub-UZbP.js совпал с локальной сборкой по SHA-256:
+  995fc2b5faa4faebe6e75756a49dd680ed9d5a977067584143d693e23a8aedba.
+  Ошибок приложения после этого выпуска в журнале Render не найдено.
 
 Следующая работа ассистента после добавления настроек владельцем: проверить Live,
 пройти настоящий AI-цикл на синтетических данных и проверить результат после redeploy.
